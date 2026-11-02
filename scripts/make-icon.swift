@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// EdgeSlider, Copyright (C) 2026 Osborne Saldanha. See LICENSE.
+
 // Renders the EdgeSlider app icon (graphite + orange) into an .iconset folder.
 // Usage: make-icon <output.iconset dir>
 import AppKit

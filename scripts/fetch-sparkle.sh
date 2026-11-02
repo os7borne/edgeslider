@@ -11,6 +11,7 @@ curl -fsSL -o "$T/s.tar.xz" "https://github.com/sparkle-project/Sparkle/releases
 mkdir -p "$T/x"; tar -xf "$T/s.tar.xz" -C "$T/x"
 rm -rf vendor; mkdir -p vendor/bin
 ditto "$T/x/Sparkle.framework" vendor/Sparkle.framework
+cp "$T/x/LICENSE" vendor/Sparkle-LICENSE.txt
 cp "$T/x/bin/generate_keys" "$T/x/bin/generate_appcast" "$T/x/bin/sign_update" vendor/bin/
 touch vendor/.sparkle-$VER
 echo "Sparkle $VER ready in vendor/"

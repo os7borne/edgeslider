@@ -1,0 +1,42 @@
+name: Bug report
+description: Something doesn't work the way it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        EdgeSlider relies on Apple's undocumented trackpad and display interfaces, so the details below really help.
+  - type: input
+    id: version
+    attributes:
+      label: EdgeSlider version
+      description: Shown at the bottom of the Settings page in the menu bar panel.
+      placeholder: "1.2"
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: "macOS 15.2"
+    validations:
+      required: true
+  - type: input
+    id: hardware
+    attributes:
+      label: Mac model and trackpad
+      description: For example "MacBook Pro 14-inch 2023, built-in trackpad" or "Mac mini with Magic Trackpad 2".
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Relevant settings (Edge Width, Sensitivity, Swap Sides), other menu bar or gesture apps you run, screenshots.

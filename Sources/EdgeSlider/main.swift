@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// EdgeSlider, Copyright (C) 2026 Osborne Saldanha. See LICENSE.
+
 import Cocoa
 import CoreAudio
 
@@ -459,6 +462,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ n: Notification) {
+        // developer tool: render README screenshots and quit (see scripts/screenshots.sh)
+        let args = CommandLine.arguments
+        if let i = args.firstIndex(of: "--render-screenshots"), i + 1 < args.count {
+            Screenshots.render(to: args[i + 1])
+            NSApp.terminate(nil)
+            return
+        }
+
         item.button?.image = AppDelegate.menuBarGlyph()
         item.button?.setAccessibilityLabel("EdgeSlider")
         // dim the icon while EdgeSlider is paused

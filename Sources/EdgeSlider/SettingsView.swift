@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// EdgeSlider, Copyright (C) 2026 Osborne Saldanha. See LICENSE.
+
 import SwiftUI
 import ServiceManagement
 
@@ -14,6 +17,26 @@ private struct Badge: View {
     }
 }
 
+/// The panel's on/off switch. Native `Toggle` everywhere, except while rendering README screenshots: a background tool is
+/// never the active app, and native switches draw gray when inactive, so a stand-in is drawn instead.
+private struct SwitchControl: View {
+    @Binding var isOn: Bool
+    var small = false
+
+    var body: some View {
+        if Screenshots.isRendering {
+            let w: CGFloat = small ? 34 : 40, h: CGFloat = small ? 20 : 24
+            Capsule().fill(isOn ? Color.accentOrange : Color.gray.opacity(0.35))
+                .frame(width: w, height: h)
+                .overlay(Circle().fill(Color.white).padding(2), alignment: isOn ? .trailing : .leading)
+        } else if small {
+            Toggle("", isOn: $isOn).labelsHidden().toggleStyle(.switch).controlSize(.small).tint(.accentOrange)
+        } else {
+            Toggle("", isOn: $isOn).labelsHidden().toggleStyle(.switch).tint(.accentOrange)
+        }
+    }
+}
+
 private struct ToggleRow: View {
     let icon: String, title: String, subtitle: String
     @Binding var isOn: Bool
@@ -25,7 +48,7 @@ private struct ToggleRow: View {
                 Text(subtitle).font(.system(size: 11)).foregroundStyle(.secondary)
             }
             Spacer(minLength: 8)
-            Toggle("", isOn: $isOn).labelsHidden().toggleStyle(.switch).tint(.accentOrange)
+            SwitchControl(isOn: $isOn)
         }
     }
 }
@@ -57,9 +80,11 @@ private struct SectionTitle: View {
 struct PopoverRoot: View {
     @ObservedObject private var s = Settings.shared
     @ObservedObject private var updater = Updater.shared
-    @State private var page = 0
+    @State private var page: Int
     @State private var loginOn = SMAppService.mainApp.status == .enabled
     @State private var loginNote: String?
+
+    init(page: Int = 0) { _page = State(initialValue: page) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -87,7 +112,7 @@ struct PopoverRoot: View {
             Spacer()
             Circle().fill(s.enabled ? Color.green : Color.gray).frame(width: 8, height: 8)
             Text(s.enabled ? "Ready" : "Paused").font(.system(size: 12)).foregroundStyle(.secondary)
-            Toggle("", isOn: $s.enabled).labelsHidden().toggleStyle(.switch).controlSize(.small).tint(.accentOrange)
+            SwitchControl(isOn: $s.enabled, small: true)
         }
     }
 

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// EdgeSlider, Copyright (C) 2026 Osborne Saldanha. See LICENSE.
+
 import Foundation
 
 enum Haptic: Int, CaseIterable, Identifiable {

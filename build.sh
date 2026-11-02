@@ -7,18 +7,20 @@ cd "$(dirname "$0")"
 
 MODE=${1:-dev}
 APP=EdgeSlider.app
-VERSION=1.2
-BUILD=2
+# VERSION / BUILD / FEED_URL / EXTRA_PLIST can be overridden from the environment (used to test the updater)
+VERSION=${VERSION:-1.2}
+BUILD=${BUILD:-2}
 MIN_OS=13.0
-BUNDLE_ID=vc.osborne.edgeslider
-SRC=(main.swift Settings.swift SettingsView.swift Updater.swift)
-FEED_URL=https://edgeslider.osborne.vc/appcast.xml
+BUNDLE_ID=${BUNDLE_ID:-vc.osborne.edgeslider}   # forks: use your own
+SRC=(Sources/EdgeSlider/*.swift)
+FEED_URL=${FEED_URL:-https://edgeslider.osborne.vc/appcast.xml}
 # Sparkle EdDSA public key (the private half is in the login Keychain; `vendor/bin/generate_keys -p` prints this)
 SPARKLE_PUBLIC_KEY="9b3+QblYKhj4vExT8bWWQaht7qxzEevMcAXwv080L9w="
 SPFLAGS=(-F vendor -framework Sparkle -Xlinker -rpath -Xlinker @executable_path/../Frameworks)
-IDENTITY="Developer ID Application: Osborne Saldanha (4CMN2DUGUL)"
 # Notarization credentials (KEY_PATH, KEY_ID, ISSUER) come from a git-ignored local file; see README
 [[ -f release.local.env ]] && source ./release.local.env
+# release builds need IDENTITY ("Developer ID Application: Your Name (TEAMID)"); dev builds need nothing
+if [[ "$MODE" == "release" ]]; then : "${IDENTITY:?set IDENTITY in release.local.env}"; fi
 
 ./scripts/fetch-sparkle.sh
 T=$(mktemp -d)
@@ -40,12 +42,14 @@ fi
 # --- embed Sparkle (not sandboxed, so its XPC helper services aren't needed) ---
 ditto vendor/Sparkle.framework $APP/Contents/Frameworks/Sparkle.framework
 rm -rf $APP/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices $APP/Contents/Frameworks/Sparkle.framework/XPCServices
+cp vendor/Sparkle-LICENSE.txt $APP/Contents/Resources/Sparkle-LICENSE.txt   # MIT: keep the notice with the binary
 
 # --- app icon: render the iconset with make-icon.swift, then pack it into AppIcon.icns ---
-swiftc -O make-icon.swift -o "$T/make-icon"
+swiftc -O scripts/make-icon.swift -o "$T/make-icon"
 "$T/make-icon" "$T/AppIcon.iconset"
 iconutil -c icns "$T/AppIcon.iconset" -o $APP/Contents/Resources/AppIcon.icns
-cp "$T/AppIcon.iconset/icon_512x512@2x.png" AppIcon-1024.png
+mkdir -p Assets
+cp "$T/AppIcon.iconset/icon_512x512@2x.png" Assets/AppIcon-1024.png
 
 cat > $APP/Contents/Info.plist <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -65,6 +69,7 @@ cat > $APP/Contents/Info.plist <<EOF
 <key>SUFeedURL</key><string>$FEED_URL</string>
 <key>SUPublicEDKey</key><string>$SPARKLE_PUBLIC_KEY</string>
 <key>SUEnableAutomaticChecks</key><true/>
+$EXTRA_PLIST
 <key>NSHumanReadableCopyright</key><string>© Osborne Saldanha</string>
 </dict></plist>
 EOF
