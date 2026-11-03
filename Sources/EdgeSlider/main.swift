@@ -471,10 +471,14 @@ final class EdgeController {
         guard landedInEdge else { return }
 
         if side == nil {
-            // not engaged yet: cancel if it drifts inward, engage after vertical dead zone
+            // not engaged yet: cancel if it drifts inward, engage after the hold delay and the vertical dead zone
             let edgeDist = landSide == .left ? t.x : 1 - t.x
             if edgeDist > cfg.edgeWidth * 1.8 { landedInEdge = false; return }
-            if abs(t.y - startY) > deadZone { begin(landSide, t) }
+            if abs(t.y - startY) > deadZone {
+                // hold delay: a finger must rest on the edge first. Moving sooner is a palm sliding past or a swipe.
+                if now - startT < Double(cfg.holdDelay) { landedInEdge = false; return }
+                begin(landSide, t)
+            }
             return
         }
 

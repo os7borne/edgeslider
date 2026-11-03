@@ -189,6 +189,10 @@ struct PopoverRoot: View {
     private var settingsPage: some View {
         VStack(alignment: .leading, spacing: 14) {
             SectionTitle(text: "Edge Gestures")
+            SliderRow(icon: "hand.raised.fill", title: "Hold Delay",
+                      valueText: s.holdDelay < 0.01 ? "Off" : "\(Int((s.holdDelay * 1000).rounded())) ms",
+                      value: Binding(get: { Double(s.holdDelay) }, set: { s.holdDelay = Float($0) }),
+                      range: 0...0.5, step: 0.05)
             ToggleRow(icon: "arrow.left.arrow.right", title: "Swap Sides",
                       subtitle: s.swapSides ? "Left: Volume · Right: Brightness" : "Left: Brightness · Right: Volume",
                       isOn: $s.swapSides)

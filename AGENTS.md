@@ -49,6 +49,7 @@ Every Swift file starts with the two-line SPDX header (`GPL-3.0-or-later`).
 - Only **single-finger** frames are handled (`count == 1`).
 - **Landing rule (anti false-trigger):** a finger only counts if it *landed* inside an edge zone (`edgeWidth`, default 7%), then must move vertically
   past `deadZone` (0.035 of pad height, constant in main.swift) before it engages. Drifting inward past 1.8x edge width before engaging cancels it.
+  **Hold delay (post-1.4 build, `holdDelay` 0.15s default, 0-0.5s in Settings):** crossing `deadZone` sooner than that after landing cancels the touch (a palm sliding past or a swipe); the finger must rest first. It does **not** stop a palm that lands and then rests and moves later. Untested on hardware; idea if it is not enough: ignore the sliders for ~0.5s after a key press (as the corner taps do), or use contact size.
   Optional `bottomQuarterOnly` requires landing at y < 0.25. Sliding is **relative** (no jump on touch-down).
 - **Pointer pinning:** on engage, `CGAssociateMouseAndMouseCursorPosition(0)` plus `CGWarpMouseCursorPosition(anchor)` every frame. No Accessibility permission.
 - **Output is coalesced:** `push()` stores only the newest value and applies it on a serial `userInteractive` queue (Volume/Brightness calls are slow). The HUD is
@@ -67,7 +68,7 @@ Every Swift file starts with the two-line SPDX header (`GPL-3.0-or-later`).
 
 ### Settings and defaults
 
-`enabled` true, `sensitivity` 1.3 (0.5-3.0), `edgeWidth` 0.07 (0.03-0.12), `haptic` strong, `freezeCursor` true, `swapSides` false,
+`enabled` true, `sensitivity` 1.3 (0.5-3.0), `edgeWidth` 0.07 (0.03-0.12), `holdDelay` 0.15 (0-0.5), `haptic` strong, `freezeCursor` true, `swapSides` false,
 `bottomQuarterOnly` false, `quickMute` **false**, `switchOutput` **false**, `cornerEdge` top, `showPercent` true. Launch-at-login is `SMAppService.mainApp` (works reliably only from /Applications).
 Automatic update checks are Sparkle's own preference.
 

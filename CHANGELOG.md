@@ -7,6 +7,9 @@ All notable changes to EdgeSlider are listed here. The format follows [Keep a Ch
 ### Added
 - Corner Position setting: Quick Mute and Switch Output can listen in the top or the bottom corners of the trackpad.
 
+### Changed
+- Hold Delay: a finger must rest on the edge for 150 ms before the slider engages (adjustable under Settings, or off), so a palm brushing past the edge no longer moves brightness or volume.
+
 ### Removed
 - The media strip (swipe the bottom edge to skip tracks).
 

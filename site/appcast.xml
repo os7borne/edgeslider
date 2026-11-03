@@ -11,9 +11,10 @@
             <description sparkle:format="markdown"><![CDATA[## EdgeSlider 1.4
 
 - New: Corner Position. Choose whether the corner double-taps (Quick Mute and Switch Output) use the top or the bottom corners of the trackpad. Find it under Settings.
+- New: Hold Delay. The edge sliders now wait a moment (150 ms, adjustable in Settings) before engaging, so a palm brushing the edge no longer changes brightness or volume.
 - Removed: the media strip (bottom-edge swipe to skip tracks).
 ]]></description>
-            <enclosure url="https://github.com/os7borne/edgeslider/releases/download/v1.4/EdgeSlider.zip" length="2374618" type="application/octet-stream" sparkle:edSignature="6imQWeJVF7DctrJ+ZBNcGNnzNcj0XZCJNectATC0i/SCbThaJbOZSYGOcq+nrnSioa1ltFkRup623X2ifFyzDA=="/>
+            <enclosure url="https://github.com/os7borne/edgeslider/releases/download/v1.4/EdgeSlider.zip" length="2376877" type="application/octet-stream" sparkle:edSignature="L30vsJB3O/d8fKB9YJPhfOa3G97ZvwnYjMbOilOaiwllOHi5uzr3IoMSHWo4ZIi+96R/X2sm1JeWXLn8pvdnCw=="/>
         </item>
         <item>
             <title>1.3.3</title>

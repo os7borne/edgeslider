@@ -24,6 +24,7 @@ final class Settings: ObservableObject {
     @Published var enabled: Bool        { didSet { d.set(enabled, forKey: "enabled") } }
     @Published var sensitivity: Float   { didSet { d.set(sensitivity, forKey: "sensitivity") } }   // 0.5 ... 3
     @Published var edgeWidth: Float     { didSet { d.set(edgeWidth, forKey: "edgeWidth") } }       // 0.03 ... 0.12
+    @Published var holdDelay: Float     { didSet { d.set(holdDelay, forKey: "holdDelay") } }          // seconds, 0 ... 0.5
     @Published var haptic: Haptic       { didSet { d.set(haptic.rawValue, forKey: "haptic") } }
     @Published var freezeCursor: Bool   { didSet { d.set(freezeCursor, forKey: "freezeCursor") } }
     @Published var swapSides: Bool      { didSet { d.set(swapSides, forKey: "swapSides") } }
@@ -35,7 +36,7 @@ final class Settings: ObservableObject {
 
     private init() {
         d.register(defaults: [
-            "enabled": true, "sensitivity": 1.3, "edgeWidth": 0.07, "haptic": Haptic.strong.rawValue,
+            "enabled": true, "sensitivity": 1.3, "edgeWidth": 0.07, "haptic": Haptic.strong.rawValue, "holdDelay": 0.15,
             "freezeCursor": true, "swapSides": false, "bottomQuarterOnly": false,
             "quickMute": false,      // off by default: with Tap to Click on, taps also click under the pointer
             "cornerEdge": CornerEdge.top.rawValue,
@@ -45,6 +46,7 @@ final class Settings: ObservableObject {
         enabled = d.bool(forKey: "enabled")
         sensitivity = d.float(forKey: "sensitivity")
         edgeWidth = d.float(forKey: "edgeWidth")
+        holdDelay = d.float(forKey: "holdDelay")
         haptic = Haptic(rawValue: d.integer(forKey: "haptic")) ?? .strong
         freezeCursor = d.bool(forKey: "freezeCursor")
         swapSides = d.bool(forKey: "swapSides")
