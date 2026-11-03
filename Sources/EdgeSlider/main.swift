@@ -143,17 +143,6 @@ enum AudioOutput {
     }
 }
 
-/// Posts a system media key press (next=17, previous=18).
-func sendMediaKey(_ key: Int) {
-    for down in [true, false] {
-        let flags = NSEvent.ModifierFlags(rawValue: down ? 0xa00 : 0xb00)
-        let data1 = (key << 16) | ((down ? 0xa : 0xb) << 8)
-        NSEvent.otherEvent(with: .systemDefined, location: .zero, modifierFlags: flags, timestamp: 0,
-                           windowNumber: 0, context: nil, subtype: 8, data1: data1, data2: -1)?
-            .cgEvent?.post(tap: .cghidEventTap)
-    }
-}
-
 // MARK: - Brightness (DisplayServices, private)
 
 enum Brightness {
@@ -420,9 +409,7 @@ final class EdgeController {
     private var frozen = false
     private var lastTick = 0
     private var atLimit = false
-    private var bottomStrip = false
-    private var mediaFired = false
-    private enum Corner { case none, topRight, topLeft }
+    private enum Corner { case none, right, left }   // right = Quick Mute, left = Switch Output
     private var corner = Corner.none
     private var lastTap: [Corner: (t: Double, x: Float, y: Float)] = [:]   // first tap of a pending double-tap
     private let deviceHUD = DeviceHUD()
@@ -474,15 +461,13 @@ final class EdgeController {
             landedInEdge = inEdge && zoneOK
             landSide = t.x < 0.5 ? .left : .right
             startX = t.x; startY = t.y; lastY = t.y; startT = now; maxMove = 0
-            mediaFired = false
-            bottomStrip = cfg.mediaStrip && t.y < 0.10 && !inEdge
-            corner = t.y <= 0.86 ? .none
-                   : (cfg.quickMute && t.x > 0.86) ? .topRight
-                   : (cfg.switchOutput && t.x < 0.14) ? .topLeft : .none
+            let inCornerRow = cfg.cornerEdge == .top ? t.y > 0.86 : t.y < 0.14
+            corner = !inCornerRow ? .none
+                   : (cfg.quickMute && t.x > 0.86) ? .right
+                   : (cfg.switchOutput && t.x < 0.14) ? .left : .none
         }
         maxMove = max(maxMove, abs(t.x - startX), abs(t.y - startY))
 
-        if bottomStrip { handleMedia(t); return }
         guard landedInEdge else { return }
 
         if side == nil {
@@ -530,23 +515,11 @@ final class EdgeController {
         if frozen { CGAssociateMouseAndMouseCursorPosition(1); frozen = false }
     }
 
-    // MARK: media strip: horizontal swipe along the bottom edge
-
-    private func handleMedia(_ t: (id: Int32, x: Float, y: Float)) {
-        guard !mediaFired else { return }
-        let dx = t.x - startX
-        if abs(dx) > 0.22 && abs(t.y - startY) < 0.2 {
-            mediaFired = true                            // once per swipe
-            sendMediaKey(dx > 0 ? 17 : 18)               // next / previous
-            bumpHaptic()
-        }
-    }
-
-    // MARK: corner double-taps: top-right mutes, top-left switches the output device
+    // MARK: corner double-taps: right corner mutes, left corner switches the output device (top or bottom row, see Settings.cornerEdge)
 
     private func finishTap(_ now: Double) {
         guard trackedID != -1, corner != .none, maxMove < 0.06, now - startT < 0.6 else { return }
-        // typing guard: a palm resting on a top corner while typing is not a tap
+        // typing guard: a palm resting on a corner while typing is not a tap
         let sinceKey = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .keyDown)
         guard sinceKey > 0.5 else { lastTap[corner] = nil; return }
         // same-spot check: the second tap must land near the first
@@ -557,7 +530,7 @@ final class EdgeController {
         }
         lastTap[corner] = nil
         bumpHaptic()
-        if corner == .topRight {
+        if corner == .right {
             let vs = volumeSide
             applyQueue.async { [self] in
                 let m = Volume.toggleMute()

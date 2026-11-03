@@ -9,6 +9,13 @@ enum Haptic: Int, CaseIterable, Identifiable {
     var label: String { ["Off", "Light", "Strong"][rawValue] }
 }
 
+enum CornerEdge: Int, CaseIterable, Identifiable {
+    case top, bottom
+    var id: Int { rawValue }
+    var label: String { ["Top", "Bottom"][rawValue] }
+    var word: String { ["top", "bottom"][rawValue] }
+}
+
 /// All user preferences, persisted in UserDefaults. Read from the touch thread, written from the UI.
 final class Settings: ObservableObject {
     static let shared = Settings()
@@ -23,7 +30,7 @@ final class Settings: ObservableObject {
     @Published var bottomQuarterOnly: Bool { didSet { d.set(bottomQuarterOnly, forKey: "bottomQuarterOnly") } }
     @Published var quickMute: Bool      { didSet { d.set(quickMute, forKey: "quickMute") } }
     @Published var switchOutput: Bool   { didSet { d.set(switchOutput, forKey: "switchOutput") } }
-    @Published var mediaStrip: Bool     { didSet { d.set(mediaStrip, forKey: "mediaStrip") } }
+    @Published var cornerEdge: CornerEdge { didSet { d.set(cornerEdge.rawValue, forKey: "cornerEdge") } }
     @Published var showPercent: Bool    { didSet { d.set(showPercent, forKey: "showPercent") } }
 
     private init() {
@@ -31,8 +38,9 @@ final class Settings: ObservableObject {
             "enabled": true, "sensitivity": 1.3, "edgeWidth": 0.07, "haptic": Haptic.strong.rawValue,
             "freezeCursor": true, "swapSides": false, "bottomQuarterOnly": false,
             "quickMute": false,      // off by default: with Tap to Click on, taps also click under the pointer
+            "cornerEdge": CornerEdge.top.rawValue,
             "switchOutput": false,   // off by default, same Tap to Click caveat as quickMute
-            "mediaStrip": true, "showPercent": true,
+            "showPercent": true,
         ])
         enabled = d.bool(forKey: "enabled")
         sensitivity = d.float(forKey: "sensitivity")
@@ -43,7 +51,7 @@ final class Settings: ObservableObject {
         bottomQuarterOnly = d.bool(forKey: "bottomQuarterOnly")
         quickMute = d.bool(forKey: "quickMute")
         switchOutput = d.bool(forKey: "switchOutput")
-        mediaStrip = d.bool(forKey: "mediaStrip")
+        cornerEdge = CornerEdge(rawValue: d.integer(forKey: "cornerEdge")) ?? .top
         showPercent = d.bool(forKey: "showPercent")
     }
 }

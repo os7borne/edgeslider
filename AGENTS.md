@@ -8,7 +8,7 @@ Handoff notes for the next session. Written 2026-11-03, at the end of the sessio
 
 EdgeSlider is a tiny macOS menu bar app (Swift, SwiftUI + AppKit, no Xcode project). Rest one finger on the **left edge** of the
 trackpad and slide for **brightness**, **right edge** for **volume** (swappable). A pill indicator slides in from the screen edge,
-the trackpad gives haptic ticks, and the pointer stays put. Bottom-edge swipe skips tracks. Free, GPL-3.0-or-later, signed and notarized.
+the trackpad gives haptic ticks, and the pointer stays put. Free, GPL-3.0-or-later, signed and notarized.
 
 - Owner: Osborne Saldanha (https://osborne.vc). Credit line "A mini app by Osborne Saldanha" appears in the panel and site. Surname is **Saldanha**.
 - Repo: https://github.com/os7borne/edgeslider (public). Site: https://edgeslider.osborne.vc (Vercel, from `site/`).
@@ -57,19 +57,18 @@ Every Swift file starts with the two-line SPDX header (`GPL-3.0-or-later`).
 - **Haptics:** `NSHapticFeedbackManager` (no intensity API). Off / Light (tick every 10%, `.alignment`) / Strong (every 5%, `.levelChange`); bump at 0% and 100%.
 - **HUD pill:** borderless window, vertical pill on the screen edge matching the slider side; icon + optional percent + white fill. Slides in 0.22s, holds 0.8s after the last
   update, slides out 0.2s; a generation counter prevents a stale fade from hiding a live pill. Main display only.
-- **Media strip:** touch landing at y < 0.10 outside the edge zones; horizontal travel > 0.22 of pad width (vertical drift < 0.2) fires **once** per swipe:
-  `NSEvent.systemDefined` media key 17 (next) / 18 (previous) posted to `cghidEventTap`.
 - **Quick Mute:** tap (< 0.6s, movement < 0.06) in the top-right corner (x > 0.86, y > 0.86), twice within 0.7s (lift to lift), toggles the output mute and shows the volume pill.
   **Off by default**: with Tap to Click on, taps also click under the pointer and that cannot be blocked without an event tap (Accessibility permission).
 - **Switch Output (1.3, build 3, built and notarized 2026-11-03, release not yet published):** double-tap the top-left corner (x < 0.14, y > 0.86, same tap rules as Quick Mute, own timestamp) cycles `AudioOutput.outputs()` (CoreAudio; output channels, not hidden, aggregate/virtual skipped) and sets default output + system output. `DeviceHUD` shows icon + name at top centre. Setting `switchOutput`, **off by default** (same Tap to Click caveat). Built and compiled; **not tested on hardware** (Bluetooth/HDMI cycling unverified). Site not updated yet; add a card when 1.3 ships.
 - **Corner tap tuning (2026-11-03, hardware-verified on the owner's Mac):** the original limits (0.25s, 0.025, 0.45s) failed in real use. Taps on the extreme corner tip (y or x ~1.0) are sensed poorly: contact lingers 0.4-3s and the centroid jumps ~0.05. Taps ~1 cm in from the tip last 0.05-0.15s with gaps of 0.2-0.3s. Logging showed 12/12 double-taps firing with the relaxed limits. Fixed in 1.3.1 (build 4, built and notarized 2026-11-03, release not yet published); 1.3 shipped with the old limits.
 - **False-tap guards (1.3.2, build 5, built and notarized 2026-11-03, release not yet published; built before the owner confirmed hardware tests):** corner taps are ignored if a key was pressed in the last 0.5s (`CGEventSource.secondsSinceLastEventType`, no permission needed; palms rest on the top corners while typing), and the second tap must start within 0.12 of the first tap's start (pad-normalised x and y). `lastTap[corner]` replaces the old per-corner timestamps.
+- **Corner Position (1.4):** setting `cornerEdge` (Top default / Bottom) moves both corner gestures to the top (y > 0.86) or bottom (y < 0.14) row; right corner = Quick Mute, left = Switch Output (`Corner` enum is `.right/.left`). Picker is on the Settings page under "Corner Taps"; the main-page subtitles follow the choice. Bottom corners are also the physical-click corners (Tap to Click caveat applies). Shipped in 1.4; **not tested on hardware** at release time.
 - **Menu bar glyph:** template `NSImage` drawn in code (trackpad outline + two bars); dims when paused; tinted orange (`contentTintColor`) when an update is waiting.
 
 ### Settings and defaults
 
 `enabled` true, `sensitivity` 1.3 (0.5-3.0), `edgeWidth` 0.07 (0.03-0.12), `haptic` strong, `freezeCursor` true, `swapSides` false,
-`bottomQuarterOnly` false, `quickMute` **false**, `mediaStrip` true, `showPercent` true. Launch-at-login is `SMAppService.mainApp` (works reliably only from /Applications).
+`bottomQuarterOnly` false, `quickMute` **false**, `switchOutput` **false**, `cornerEdge` top, `showPercent` true. Launch-at-login is `SMAppService.mainApp` (works reliably only from /Applications).
 Automatic update checks are Sparkle's own preference.
 
 ## Build, release, update pipeline
@@ -126,8 +125,8 @@ Nav and footer link to GitHub and say "Open source (GPL-3.0)". The Download butt
 
 ## Decision log (why things are the way they are)
 
-- **Hold-to-seek on the bottom strip was built, then removed.** Browsers and YouTube do not map fast-forward/rewind media keys to seeking; only skip remained. The strip now fires next/previous once per swipe.
-- Skipping needs a player with a queue (Music, Spotify, playlists). A lone YouTube video does nothing. macOS may prompt for permission when media keys are first sent (unverified).
+- **The media strip was removed in 1.4** (owner: it did not work the way they wanted). Earlier: hold-to-seek was built then removed because browsers/YouTube ignore fast-forward/rewind media keys; skip needed a player with a queue.
+- **Seeking research (2026-11-04):** `MediaRemote` (private) loads on macOS 27 but `MRMediaRemoteGetNowPlayingInfo` returns nil and `SendCommand` (GoBackFifteenSeconds) had no effect with YouTube playing in a browser: third-party access is gated by Apple entitlements. Not enabled by any setting. Untested alternatives: send ←/→ to the frontmost app (Accessibility permission unknown), Music/Spotify scripting (Automation prompt). A `/usr/bin/perl` adapter trick exists but is fragile; not pursued.
 - Quick Mute defaults off (Tap to Click side effect). Tap-to-Play/Pause was deliberately not built for the same reason plus false triggers.
 - Distribution is **outside the App Store** (private frameworks). Developer ID + notarization + Sparkle, matching the Ozmail/Cal pattern.
 - License chosen by the user: **GPL v3** (headers say or-later). Sparkle is MIT-compatible.
@@ -155,7 +154,7 @@ Nav and footer link to GitHub and say "Open source (GPL-3.0)". The Download butt
 
 1. Push the pending commit; then verify the repo page (license detected, README images load) and that Vercel redeployed the site with the new links.
 2. Upload `docs/images/social-preview.png` at GitHub repo Settings -> Social preview (no API). Optionally enable private vulnerability reporting and pin the repo.
-3. Test the release on a second (ideally Intel or older-macOS) Mac: first launch, Open at Login, media strip, update check.
+3. Test the release on a second (ideally Intel or older-macOS) Mac: first launch, Open at Login, corner taps, update check.
 4. Cut **1.3** (restructure + Sparkle notice) as the real end-to-end update test from the installed 1.2.
 5. Backlog ideas, roughly by value: keyboard-backlight edge, top-edge swipe for Spaces/app switching, Fine Control (hold Shift+Option for quarter steps), Require Fn/Option modifier,
    live brightness/volume gauge card in the panel, Light/Dark appearance toggle, "run a Shortcut" bindings, extract the gesture state machine for unit tests, a GitHub Actions build check, Tap-to-Play/Pause (risky).

@@ -2,6 +2,14 @@
 
 All notable changes to EdgeSlider are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.4] - 2026-11-04
+
+### Added
+- Corner Position setting: Quick Mute and Switch Output can listen in the top or the bottom corners of the trackpad.
+
+### Removed
+- The media strip (swipe the bottom edge to skip tracks).
+
 ## [1.3.3] - 2026-11-03
 
 ### Fixed

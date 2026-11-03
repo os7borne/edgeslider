@@ -171,11 +171,9 @@ struct PopoverRoot: View {
                 }.labelsHidden().pickerStyle(.menu).frame(width: 90)
             }
             ToggleRow(icon: "speaker.slash.fill", title: "Quick Mute",
-                      subtitle: "Double-tap the top-right corner", isOn: $s.quickMute)
+                      subtitle: "Double-tap the \(s.cornerEdge.word)-right corner", isOn: $s.quickMute)
             ToggleRow(icon: "airpods", title: "Switch Output",
-                      subtitle: "Double-tap the top-left corner", isOn: $s.switchOutput)
-            ToggleRow(icon: "forward.fill", title: "Media Strip",
-                      subtitle: "Swipe the bottom edge to skip songs", isOn: $s.mediaStrip)
+                      subtitle: "Double-tap the \(s.cornerEdge.word)-left corner", isOn: $s.switchOutput)
             Divider()
             SliderRow(icon: "gauge.with.dots.needle.33percent", title: "Sensitivity",
                       valueText: String(format: "%.1f×", s.sensitivity),
@@ -196,6 +194,19 @@ struct PopoverRoot: View {
                       isOn: $s.swapSides)
             ToggleRow(icon: "rectangle.bottomhalf.filled", title: "Bottom Quarter Only",
                       subtitle: "Ignore touches above the lower 25%", isOn: $s.bottomQuarterOnly)
+            Divider()
+            SectionTitle(text: "Corner Taps")
+            HStack(spacing: 12) {
+                Badge(symbol: "rectangle.inset.filled")
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Corner Position").font(.system(size: 13, weight: .medium))
+                    Text("Where Quick Mute and Switch Output listen").font(.system(size: 11)).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Picker("", selection: $s.cornerEdge) {
+                    ForEach(CornerEdge.allCases) { Text($0.label).tag($0) }
+                }.labelsHidden().pickerStyle(.menu).frame(width: 90)
+            }
             Divider()
             SectionTitle(text: "Display")
             ToggleRow(icon: "percent", title: "Show Percentage",
