@@ -2,6 +2,11 @@
 
 All notable changes to EdgeSlider are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.3.3] - 2026-11-03
+
+### Fixed
+- The volume and brightness pill and the output-switch pill now show over full-screen apps.
+
 ## [1.3.2] - 2026-11-03
 
 ### Changed
