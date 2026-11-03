@@ -22,6 +22,7 @@ final class Settings: ObservableObject {
     @Published var swapSides: Bool      { didSet { d.set(swapSides, forKey: "swapSides") } }
     @Published var bottomQuarterOnly: Bool { didSet { d.set(bottomQuarterOnly, forKey: "bottomQuarterOnly") } }
     @Published var quickMute: Bool      { didSet { d.set(quickMute, forKey: "quickMute") } }
+    @Published var switchOutput: Bool   { didSet { d.set(switchOutput, forKey: "switchOutput") } }
     @Published var mediaStrip: Bool     { didSet { d.set(mediaStrip, forKey: "mediaStrip") } }
     @Published var showPercent: Bool    { didSet { d.set(showPercent, forKey: "showPercent") } }
 
@@ -30,6 +31,7 @@ final class Settings: ObservableObject {
             "enabled": true, "sensitivity": 1.3, "edgeWidth": 0.07, "haptic": Haptic.strong.rawValue,
             "freezeCursor": true, "swapSides": false, "bottomQuarterOnly": false,
             "quickMute": false,      // off by default: with Tap to Click on, taps also click under the pointer
+            "switchOutput": false,   // off by default, same Tap to Click caveat as quickMute
             "mediaStrip": true, "showPercent": true,
         ])
         enabled = d.bool(forKey: "enabled")
@@ -40,6 +42,7 @@ final class Settings: ObservableObject {
         swapSides = d.bool(forKey: "swapSides")
         bottomQuarterOnly = d.bool(forKey: "bottomQuarterOnly")
         quickMute = d.bool(forKey: "quickMute")
+        switchOutput = d.bool(forKey: "switchOutput")
         mediaStrip = d.bool(forKey: "mediaStrip")
         showPercent = d.bool(forKey: "showPercent")
     }

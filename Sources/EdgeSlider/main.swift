@@ -60,6 +60,89 @@ enum Volume {
     }
 }
 
+// MARK: - Output device switching (CoreAudio)
+
+enum AudioOutput {
+    struct Device { let id: AudioDeviceID; let name: String; let symbol: String }
+
+    private static func address(_ selector: AudioObjectPropertySelector,
+                                _ scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal) -> AudioObjectPropertyAddress {
+        AudioObjectPropertyAddress(mSelector: selector, mScope: scope, mElement: kAudioObjectPropertyElementMain)
+    }
+
+    private static func uint32(_ id: AudioObjectID, _ selector: AudioObjectPropertySelector) -> UInt32 {
+        var a = address(selector); var v = UInt32(0); var size = UInt32(4)
+        AudioObjectGetPropertyData(id, &a, 0, nil, &size, &v)
+        return v
+    }
+
+    private static func hasOutput(_ id: AudioObjectID) -> Bool {
+        var a = address(kAudioDevicePropertyStreamConfiguration, kAudioDevicePropertyScopeOutput)
+        var size = UInt32(0)
+        guard AudioObjectGetPropertyDataSize(id, &a, 0, nil, &size) == noErr, size > 0 else { return false }
+        let raw = UnsafeMutableRawPointer.allocate(byteCount: Int(size), alignment: MemoryLayout<AudioBufferList>.alignment)
+        defer { raw.deallocate() }
+        guard AudioObjectGetPropertyData(id, &a, 0, nil, &size, raw) == noErr else { return false }
+        let list = UnsafeMutableAudioBufferListPointer(raw.assumingMemoryBound(to: AudioBufferList.self))
+        return list.contains { $0.mNumberChannels > 0 }
+    }
+
+    private static func name(_ id: AudioObjectID) -> String {
+        var a = address(kAudioObjectPropertyName)
+        var s: Unmanaged<CFString>?
+        var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+        guard AudioObjectGetPropertyData(id, &a, 0, nil, &size, &s) == noErr, let s = s else { return "Audio Output" }
+        return s.takeRetainedValue() as String
+    }
+
+    private static func symbol(transport: UInt32, name: String) -> String {
+        if name.localizedCaseInsensitiveContains("airpods") { return "airpods" }
+        switch transport {
+        case kAudioDeviceTransportTypeBluetooth, kAudioDeviceTransportTypeBluetoothLE: return "headphones"
+        case kAudioDeviceTransportTypeHDMI, kAudioDeviceTransportTypeDisplayPort: return "display"
+        case kAudioDeviceTransportTypeAirPlay: return "airplayaudio"
+        case kAudioDeviceTransportTypeUSB: return "hifispeaker.fill"
+        default: return "speaker.wave.2.fill"
+        }
+    }
+
+    /// Real, connected outputs in system order (aggregate, virtual and hidden devices are skipped).
+    static func outputs() -> [Device] {
+        var a = address(kAudioHardwarePropertyDevices)
+        var size = UInt32(0)
+        let sys = AudioObjectID(kAudioObjectSystemObject)
+        guard AudioObjectGetPropertyDataSize(sys, &a, 0, nil, &size) == noErr else { return [] }
+        var ids = [AudioDeviceID](repeating: 0, count: Int(size) / MemoryLayout<AudioDeviceID>.size)
+        guard AudioObjectGetPropertyData(sys, &a, 0, nil, &size, &ids) == noErr else { return [] }
+        return ids.compactMap { id in
+            guard hasOutput(id), uint32(id, kAudioDevicePropertyIsHidden) == 0 else { return nil }
+            let t = uint32(id, kAudioDevicePropertyTransportType)
+            if t == kAudioDeviceTransportTypeAggregate || t == kAudioDeviceTransportTypeVirtual { return nil }
+            let n = name(id)
+            return Device(id: id, name: n, symbol: symbol(transport: t, name: n))
+        }
+    }
+
+    /// Makes the next output the system default (output and alerts) and returns it.
+    @discardableResult
+    static func cycle() -> Device? {
+        let list = outputs()
+        guard !list.isEmpty else { return nil }
+        Volume.refreshDevice()
+        let i = list.firstIndex { $0.id == Volume.deviceID }
+        let next = list[((i ?? -1) + 1) % list.count]
+        guard list.count > 1 else { return next }
+        var id = next.id
+        let sys = AudioObjectID(kAudioObjectSystemObject)
+        for sel in [kAudioHardwarePropertyDefaultOutputDevice, kAudioHardwarePropertyDefaultSystemOutputDevice] {
+            var a = address(sel)
+            AudioObjectSetPropertyData(sys, &a, 0, nil, UInt32(MemoryLayout<AudioDeviceID>.size), &id)
+        }
+        Volume.refreshDevice()
+        return next
+    }
+}
+
 /// Posts a system media key press (next=17, previous=18).
 func sendMediaKey(_ key: Int) {
     for down in [true, false] {
@@ -231,6 +314,91 @@ final class HUD {
     }
 }
 
+/// Horizontal pill at the top centre of the main display: icon + output device name.
+final class DeviceHUD {
+    private let window: NSWindow
+    private let icon = NSImageView()
+    private let label = NSTextField(labelWithString: "")
+    private var generation = 0
+    private let height: CGFloat = 52
+
+    init() {
+        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 240, height: height),
+                          styleMask: .borderless, backing: .buffered, defer: false)
+        window.level = .screenSaver
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        window.hasShadow = true
+        window.ignoresMouseEvents = true
+        window.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
+
+        let fx = NSVisualEffectView()
+        fx.material = .hudWindow; fx.state = .active; fx.blendingMode = .behindWindow
+        fx.maskImage = NSImage(size: NSSize(width: 40, height: 40), flipped: false) { rect in
+            NSColor.black.setFill()
+            NSBezierPath(roundedRect: rect, xRadius: 20, yRadius: 20).fill()
+            return true
+        }
+        fx.maskImage?.capInsets = NSEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
+        fx.maskImage?.resizingMode = .stretch
+
+        icon.contentTintColor = .white
+        icon.symbolConfiguration = .init(pointSize: 17, weight: .semibold)
+        label.font = .systemFont(ofSize: 13, weight: .semibold)
+        label.textColor = .white
+        label.lineBreakMode = .byTruncatingTail
+        let stack = NSStackView(views: [icon, label])
+        stack.spacing = 10
+        stack.edgeInsets = NSEdgeInsets(top: 0, left: 18, bottom: 0, right: 20)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        fx.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: fx.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: fx.trailingAnchor),
+            stack.centerYAnchor.constraint(equalTo: fx.centerYAnchor),
+        ])
+        window.contentView = fx
+    }
+
+    /// Safe from any thread.
+    func show(_ device: AudioOutput.Device) {
+        DispatchQueue.main.async { [self] in
+            icon.image = NSImage(systemSymbolName: device.symbol, accessibilityDescription: nil)
+            label.stringValue = device.name
+            let width = min(max(label.intrinsicContentSize.width + 18 + 17 + 10 + 20 + 4, 150), 420)
+            guard let sc = NSScreen.main else { return }
+            let vf = sc.visibleFrame
+            let x = vf.midX - width / 2
+            let on = NSRect(x: x, y: vf.maxY - height - 14, width: width, height: height)
+            let off = on.offsetBy(dx: 0, dy: 30)
+            generation += 1
+            let gen = generation
+            if !window.isVisible {
+                window.alphaValue = 0
+                window.setFrame(off, display: false)
+                window.orderFrontRegardless()
+            }
+            slide(to: on, alpha: 1, duration: 0.22, curve: .easeOut)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { [weak self] in
+                guard let self = self, self.generation == gen else { return }
+                self.slide(to: off, alpha: 0, duration: 0.2, curve: .easeIn) {
+                    if self.generation == gen { self.window.orderOut(nil) }
+                }
+            }
+        }
+    }
+
+    private func slide(to frame: NSRect, alpha: CGFloat, duration: TimeInterval,
+                       curve: CAMediaTimingFunctionName, done: (() -> Void)? = nil) {
+        NSAnimationContext.runAnimationGroup({ ctx in
+            ctx.duration = duration
+            ctx.timingFunction = CAMediaTimingFunction(name: curve)
+            window.animator().setFrame(frame, display: true)
+            window.animator().alphaValue = alpha
+        }, completionHandler: done)
+    }
+}
+
 // MARK: - Edge gesture state machine
 
 enum Side { case left, right }
@@ -254,8 +422,11 @@ final class EdgeController {
     private var atLimit = false
     private var bottomStrip = false
     private var mediaFired = false
-    private var cornerCandidate = false
-    private var lastCornerTap: Double = 0
+    private enum Corner { case none, topRight, topLeft }
+    private var corner = Corner.none
+    private var lastMuteTap: Double = 0
+    private var lastSwitchTap: Double = 0
+    private let deviceHUD = DeviceHUD()
 
     // coalesced output: only the newest value is ever applied
     private let applyQueue = DispatchQueue(label: "edgeslider.apply", qos: .userInteractive)
@@ -306,7 +477,9 @@ final class EdgeController {
             startX = t.x; startY = t.y; lastY = t.y; startT = now; maxMove = 0
             mediaFired = false
             bottomStrip = cfg.mediaStrip && t.y < 0.10 && !inEdge
-            cornerCandidate = cfg.quickMute && t.x > 0.86 && t.y > 0.86
+            corner = t.y <= 0.86 ? .none
+                   : (cfg.quickMute && t.x > 0.86) ? .topRight
+                   : (cfg.switchOutput && t.x < 0.14) ? .topLeft : .none
         }
         maxMove = max(maxMove, abs(t.x - startX), abs(t.y - startY))
 
@@ -370,20 +543,27 @@ final class EdgeController {
         }
     }
 
-    // MARK: quick mute: double-tap the top-right corner
+    // MARK: corner double-taps: top-right mutes, top-left switches the output device
 
     private func finishTap(_ now: Double) {
-        guard trackedID != -1, cornerCandidate, maxMove < 0.025, now - startT < 0.25 else { return }
-        if now - lastCornerTap < 0.45 {
-            lastCornerTap = 0
-            bumpHaptic()
+        guard trackedID != -1, corner != .none, maxMove < 0.025, now - startT < 0.25 else { return }
+        let last = corner == .topRight ? lastMuteTap : lastSwitchTap
+        guard now - last < 0.45 else {
+            if corner == .topRight { lastMuteTap = now } else { lastSwitchTap = now }
+            return
+        }
+        if corner == .topRight { lastMuteTap = 0 } else { lastSwitchTap = 0 }
+        bumpHaptic()
+        if corner == .topRight {
             let vs = volumeSide
             applyQueue.async { [self] in
                 let m = Volume.toggleMute()
                 hud.show(vs, brightness: false, m ? 0 : Volume.get())
             }
         } else {
-            lastCornerTap = now
+            applyQueue.async { [self] in
+                if let d = AudioOutput.cycle() { deviceHUD.show(d) }
+            }
         }
     }
 }

@@ -49,6 +49,7 @@ EdgeSlider keeps itself up to date: it checks for new versions daily and the men
 | Slide along the **right edge** | Volume |
 | Swipe left or right along the **bottom edge** | Previous or next track |
 | Double-tap the **top-right corner** | Mute (off by default, see below) |
+| Double-tap the **top-left corner** | Switch the sound output to the next connected device (off by default, see below) |
 
 A touch only counts if it **lands on the edge** and then moves, so a stray fingertip or a normal swipe across the pad does nothing. Sliding is relative to the current level, so nothing jumps when you touch down.
 
@@ -63,7 +64,7 @@ Everything is adjustable from the menu bar panel: haptic strength, sensitivity, 
 - **Not on the Mac App Store.** To see your fingers on the trackpad edge, EdgeSlider uses Apple's **undocumented** multitouch and display interfaces (see [How it works](#how-it-works)). The App Store doesn't allow that, and a future macOS update could change those interfaces and break the app.
 - **Brightness** changes the built-in display only. Volume follows whichever output you're using.
 - **The media strip** sends the standard Next/Previous media keys, so it needs a player with a next track, such as a playlist or the Music or Spotify apps. A single YouTube video has nothing to skip to. macOS may ask for permission the first time the keys are sent.
-- **Quick Mute is off by default.** Double-tapping a corner is a tap, and with *Tap to Click* turned on macOS also clicks wherever your pointer is. Turn it on in the panel if you use physical clicks.
+- **Quick Mute and Switch Output are off by default.** Double-tapping a corner is a tap, and with *Tap to Click* turned on macOS also clicks wherever your pointer is. Turn it on in the panel if you use physical clicks.
 - **No data collection.** There are no accounts and no analytics. The only network traffic is the update check to `edgeslider.osborne.vc`, and the download itself when you choose to install an update.
 
 ## How it works

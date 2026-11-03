@@ -2,6 +2,11 @@
 
 All notable changes to EdgeSlider are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.3] - 2026-11-03
+
+### Added
+- Switch Output: double-tap the top-left corner to cycle the sound output through the connected devices (off by default). A pill at the top of the screen shows the new device.
+
 ## [1.2] - 2026-11-02
 
 First public release.

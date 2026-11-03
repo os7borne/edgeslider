@@ -172,6 +172,8 @@ struct PopoverRoot: View {
             }
             ToggleRow(icon: "speaker.slash.fill", title: "Quick Mute",
                       subtitle: "Double-tap the top-right corner", isOn: $s.quickMute)
+            ToggleRow(icon: "airpods", title: "Switch Output",
+                      subtitle: "Double-tap the top-left corner", isOn: $s.switchOutput)
             ToggleRow(icon: "forward.fill", title: "Media Strip",
                       subtitle: "Swipe the bottom edge to skip songs", isOn: $s.mediaStrip)
             Divider()
