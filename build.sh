@@ -8,8 +8,8 @@ cd "$(dirname "$0")"
 MODE=${1:-dev}
 APP=EdgeSlider.app
 # VERSION / BUILD / FEED_URL / EXTRA_PLIST can be overridden from the environment (used to test the updater)
-VERSION=${VERSION:-1.3.1}
-BUILD=${BUILD:-4}
+VERSION=${VERSION:-1.3.2}
+BUILD=${BUILD:-5}
 MIN_OS=13.0
 BUNDLE_ID=${BUNDLE_ID:-vc.osborne.edgeslider}   # forks: use your own
 SRC=(Sources/EdgeSlider/*.swift)

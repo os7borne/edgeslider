@@ -424,8 +424,7 @@ final class EdgeController {
     private var mediaFired = false
     private enum Corner { case none, topRight, topLeft }
     private var corner = Corner.none
-    private var lastMuteTap: Double = 0
-    private var lastSwitchTap: Double = 0
+    private var lastTap: [Corner: (t: Double, x: Float, y: Float)] = [:]   // first tap of a pending double-tap
     private let deviceHUD = DeviceHUD()
 
     // coalesced output: only the newest value is ever applied
@@ -547,12 +546,16 @@ final class EdgeController {
 
     private func finishTap(_ now: Double) {
         guard trackedID != -1, corner != .none, maxMove < 0.06, now - startT < 0.6 else { return }
-        let last = corner == .topRight ? lastMuteTap : lastSwitchTap
-        guard now - last < 0.7 else {
-            if corner == .topRight { lastMuteTap = now } else { lastSwitchTap = now }
+        // typing guard: a palm resting on a top corner while typing is not a tap
+        let sinceKey = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .keyDown)
+        guard sinceKey > 0.5 else { lastTap[corner] = nil; return }
+        // same-spot check: the second tap must land near the first
+        guard let first = lastTap[corner], now - first.t < 0.7,
+              abs(startX - first.x) < 0.12, abs(startY - first.y) < 0.12 else {
+            lastTap[corner] = (now, startX, startY)
             return
         }
-        if corner == .topRight { lastMuteTap = 0 } else { lastSwitchTap = 0 }
+        lastTap[corner] = nil
         bumpHaptic()
         if corner == .topRight {
             let vs = volumeSide

@@ -2,6 +2,11 @@
 
 All notable changes to EdgeSlider are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.3.2] - 2026-11-03
+
+### Changed
+- Corner double-taps ignore touches within half a second of a key press, and both taps must land in the same spot, so a resting palm no longer triggers them.
+
 ## [1.3.1] - 2026-11-03
 
 ### Fixed
