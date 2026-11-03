@@ -59,9 +59,10 @@ Every Swift file starts with the two-line SPDX header (`GPL-3.0-or-later`).
   update, slides out 0.2s; a generation counter prevents a stale fade from hiding a live pill. Main display only.
 - **Media strip:** touch landing at y < 0.10 outside the edge zones; horizontal travel > 0.22 of pad width (vertical drift < 0.2) fires **once** per swipe:
   `NSEvent.systemDefined` media key 17 (next) / 18 (previous) posted to `cghidEventTap`.
-- **Quick Mute:** tap (< 0.25s, movement < 0.025) in the top-right corner (x > 0.86, y > 0.86), twice within 0.45s, toggles the output mute and shows the volume pill.
+- **Quick Mute:** tap (< 0.6s, movement < 0.06) in the top-right corner (x > 0.86, y > 0.86), twice within 0.7s (lift to lift), toggles the output mute and shows the volume pill.
   **Off by default**: with Tap to Click on, taps also click under the pointer and that cannot be blocked without an event tap (Accessibility permission).
 - **Switch Output (1.3, build 3, built and notarized 2026-11-03, release not yet published):** double-tap the top-left corner (x < 0.14, y > 0.86, same tap rules as Quick Mute, own timestamp) cycles `AudioOutput.outputs()` (CoreAudio; output channels, not hidden, aggregate/virtual skipped) and sets default output + system output. `DeviceHUD` shows icon + name at top centre. Setting `switchOutput`, **off by default** (same Tap to Click caveat). Built and compiled; **not tested on hardware** (Bluetooth/HDMI cycling unverified). Site not updated yet; add a card when 1.3 ships.
+- **Corner tap tuning (2026-11-03, hardware-verified on the owner's Mac):** the original limits (0.25s, 0.025, 0.45s) failed in real use. Taps on the extreme corner tip (y or x ~1.0) are sensed poorly: contact lingers 0.4-3s and the centroid jumps ~0.05. Taps ~1 cm in from the tip last 0.05-0.15s with gaps of 0.2-0.3s. Logging showed 12/12 double-taps firing with the relaxed limits. Fixed in 1.3.1 (build 4, built and notarized 2026-11-03, release not yet published); 1.3 shipped with the old limits.
 - **Menu bar glyph:** template `NSImage` drawn in code (trackpad outline + two bars); dims when paused; tinted orange (`contentTintColor`) when an update is waiting.
 
 ### Settings and defaults

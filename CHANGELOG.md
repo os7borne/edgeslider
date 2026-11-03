@@ -2,6 +2,11 @@
 
 All notable changes to EdgeSlider are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.3.1] - 2026-11-03
+
+### Fixed
+- Corner double-taps (Quick Mute, Switch Output) missed taps near the corner tip. Tap length, movement and spacing limits are more forgiving.
+
 ## [1.3] - 2026-11-03
 
 ### Added

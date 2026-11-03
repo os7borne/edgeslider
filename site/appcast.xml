@@ -3,6 +3,18 @@
     <channel>
         <title>EdgeSlider</title>
         <item>
+            <title>1.3.1</title>
+            <pubDate>Tue, 03 Nov 2026 14:09:02 +0800</pubDate>
+            <sparkle:version>4</sparkle:version>
+            <sparkle:shortVersionString>1.3.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+            <description sparkle:format="markdown"><![CDATA[## EdgeSlider 1.3.1
+
+- Fixed: the corner double-taps (Quick Mute and Switch Output) often missed, especially near the very tip of the corner. They are now much more forgiving.
+]]></description>
+            <enclosure url="https://github.com/os7borne/edgeslider/releases/download/v1.3.1/EdgeSlider.zip" length="2362009" type="application/octet-stream" sparkle:edSignature="gCWjPN1ZQAIY6loxfCLb8hgg0cHx0eRUMuGjTBrDJv4hFsp+60faLpCzec5hPu3XiPAOedhmG8ixdswFtvTKAQ=="/>
+        </item>
+        <item>
             <title>1.3</title>
             <pubDate>Tue, 03 Nov 2026 13:25:17 +0800</pubDate>
             <sparkle:version>3</sparkle:version>

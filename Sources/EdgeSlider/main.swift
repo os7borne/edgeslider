@@ -546,9 +546,9 @@ final class EdgeController {
     // MARK: corner double-taps: top-right mutes, top-left switches the output device
 
     private func finishTap(_ now: Double) {
-        guard trackedID != -1, corner != .none, maxMove < 0.025, now - startT < 0.25 else { return }
+        guard trackedID != -1, corner != .none, maxMove < 0.06, now - startT < 0.6 else { return }
         let last = corner == .topRight ? lastMuteTap : lastSwitchTap
-        guard now - last < 0.45 else {
+        guard now - last < 0.7 else {
             if corner == .topRight { lastMuteTap = now } else { lastSwitchTap = now }
             return
         }
