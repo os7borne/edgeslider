@@ -52,7 +52,11 @@ EdgeSlider keeps itself up to date: it checks for new versions daily and the men
 
 A touch only counts if it **lands on the edge** and then moves, so a stray fingertip or a normal swipe across the pad does nothing. Sliding is relative to the current level, so nothing jumps when you touch down.
 
-The menu bar panel keeps it simple: sensitivity, haptic strength, swapping the two sides, the two corner taps, and launch at login. A collapsed Advanced section holds the rest (edge width, hold delay, bottom-quarter only, corner position, percentage, pointer freeze, update checks).
+The menu bar panel keeps it simple: sensitivity, haptic strength, swapping the two sides, the two corner taps, and launch at login. "All Settings…" opens a window with everything else (edge width, hold delay, bottom-quarter only, corner position, percentage, pointer freeze, update checks).
+
+<p align="center">
+  <img src="docs/images/settings.png" height="520" alt="The All Settings window">
+</p>
 
 ## Good to know
 

@@ -70,14 +70,17 @@ private struct SliderRow: View {
     }
 }
 
+private struct SectionTitle: View {
+    let text: String
+    var body: some View {
+        Text(text).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+    }
+}
+
 struct PopoverRoot: View {
     @ObservedObject private var s = Settings.shared
     @ObservedObject private var updater = Updater.shared
-    @State private var loginOn = SMAppService.mainApp.status == .enabled
-    @State private var loginNote: String?
-    @State private var showAdvanced = false
 
-    private var version: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "" }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -90,7 +93,6 @@ struct PopoverRoot: View {
         }
         .padding(16)
         .frame(width: 340)
-        .onAppear { refreshLogin() }
     }
 
     // MARK: header / footer
@@ -111,8 +113,9 @@ struct PopoverRoot: View {
 
     private var footer: some View {
         HStack {
+            Button { SettingsWindow.show() } label: { Label("All Settings…", systemImage: "gearshape") }
+            Spacer()
             Button("Check for Updates…") { updater.checkForUpdates() }
-            Text("v\(version)").font(.system(size: 11)).foregroundStyle(.secondary).padding(.leading, 4)
             Spacer()
             Button { NSApp.terminate(nil) } label: { Image(systemName: "power") }.help("Quit EdgeSlider")
         }
@@ -169,73 +172,113 @@ struct PopoverRoot: View {
             ToggleRow(icon: "airpods", title: "Switch Output",
                       subtitle: "Double-tap the \(s.cornerEdge.word)-left corner", isOn: $s.switchOutput)
             Divider()
-            ToggleRow(icon: "power", title: "Open at Login",
-                      subtitle: loginNote ?? "Start EdgeSlider when you log in",
-                      isOn: Binding(get: { loginOn }, set: setLogin))
-            Divider()
-            advanced
+            LoginRow()
         }
     }
+}
 
-    // MARK: advanced (collapsed by default)
+private struct LoginRow: View {
+    @State private var on = SMAppService.mainApp.status == .enabled
+    @State private var note: String?
 
-    private var advanced: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Button { withAnimation(.easeInOut(duration: 0.15)) { showAdvanced.toggle() } } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: showAdvanced ? "chevron.down" : "chevron.right").font(.system(size: 10, weight: .semibold))
-                    Text("Advanced").font(.system(size: 12, weight: .medium))
-                    Spacer()
-                }
-                .foregroundStyle(.secondary)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            if showAdvanced {
-                SliderRow(icon: "arrow.left.and.right", title: "Edge Width",
-                          valueText: "\(Int((s.edgeWidth * 100).rounded()))%",
-                          value: Binding(get: { Double(s.edgeWidth * 100) }, set: { s.edgeWidth = Float($0 / 100) }),
-                          range: 3...12, step: 1)
-                SliderRow(icon: "hand.raised.fill", title: "Hold Delay",
-                          valueText: s.holdDelay < 0.01 ? "Off" : "\(Int((s.holdDelay * 1000).rounded())) ms",
-                          value: Binding(get: { Double(s.holdDelay) }, set: { s.holdDelay = Float($0) }),
-                          range: 0...0.5, step: 0.05)
-                ToggleRow(icon: "rectangle.bottomhalf.filled", title: "Bottom Quarter Only",
-                          subtitle: "Ignore touches above the lower 25%", isOn: $s.bottomQuarterOnly)
-                HStack(spacing: 12) {
-                    Badge(symbol: "rectangle.inset.filled")
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("Corner Position").font(.system(size: 13, weight: .medium))
-                        Text("Where the corner taps listen").font(.system(size: 11)).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Picker("", selection: $s.cornerEdge) {
-                        ForEach(CornerEdge.allCases) { Text($0.label).tag($0) }
-                    }.labelsHidden().pickerStyle(.menu).frame(width: 90)
-                }
-                ToggleRow(icon: "percent", title: "Show Percentage",
-                          subtitle: "Show the value on the slider pill", isOn: $s.showPercent)
-                ToggleRow(icon: "cursorarrow", title: "Freeze Cursor",
-                          subtitle: "Pointer stays put while sliding", isOn: $s.freezeCursor)
-                ToggleRow(icon: "arrow.triangle.2.circlepath", title: "Check for Updates Automatically",
-                          subtitle: "Look for new versions daily",
-                          isOn: Binding(get: { updater.automaticChecks }, set: { updater.automaticChecks = $0 }))
-            }
-        }
+    var body: some View {
+        ToggleRow(icon: "power", title: "Open at Login",
+                  subtitle: note ?? "Start EdgeSlider when you log in",
+                  isOn: Binding(get: { on }, set: set))
+            .onAppear { on = SMAppService.mainApp.status == .enabled }
     }
 
-    // MARK: launch at login
-
-    private func refreshLogin() { loginOn = SMAppService.mainApp.status == .enabled }
-
-    private func setLogin(_ on: Bool) {
+    private func set(_ new: Bool) {
         do {
-            if on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
-            loginNote = SMAppService.mainApp.status == .requiresApproval
-                ? "Approve in System Settings › Login Items" : nil
+            if new { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
+            note = SMAppService.mainApp.status == .requiresApproval ? "Approve in System Settings › Login Items" : nil
         } catch {
-            loginNote = "Couldn't change: move the app to /Applications"
+            note = "Couldn't change: move the app to /Applications"
         }
-        refreshLogin()
+        on = SMAppService.mainApp.status == .enabled
+    }
+}
+
+/// Every setting, in its own window (the menu bar panel only shows the common ones).
+struct AllSettingsView: View {
+    @ObservedObject private var s = Settings.shared
+    @ObservedObject private var updater = Updater.shared
+    private var version: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "" }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SectionTitle(text: "Sliding")
+            SliderRow(icon: "gauge.with.dots.needle.33percent", title: "Sensitivity",
+                      valueText: String(format: "%.1f×", s.sensitivity),
+                      value: Binding(get: { Double(s.sensitivity) }, set: { s.sensitivity = Float($0) }),
+                      range: 0.5...3.0, step: 0.1)
+            SliderRow(icon: "arrow.left.and.right", title: "Edge Width",
+                      valueText: "\(Int((s.edgeWidth * 100).rounded()))%",
+                      value: Binding(get: { Double(s.edgeWidth * 100) }, set: { s.edgeWidth = Float($0 / 100) }),
+                      range: 3...12, step: 1)
+            SliderRow(icon: "hand.raised.fill", title: "Hold Delay",
+                      valueText: s.holdDelay < 0.01 ? "Off" : "\(Int((s.holdDelay * 1000).rounded())) ms",
+                      value: Binding(get: { Double(s.holdDelay) }, set: { s.holdDelay = Float($0) }),
+                      range: 0...0.5, step: 0.05)
+            ToggleRow(icon: "arrow.left.arrow.right", title: "Swap Sides",
+                      subtitle: s.swapSides ? "Left: Volume · Right: Brightness" : "Left: Brightness · Right: Volume",
+                      isOn: $s.swapSides)
+            ToggleRow(icon: "rectangle.bottomhalf.filled", title: "Bottom Quarter Only",
+                      subtitle: "Ignore touches above the lower 25%", isOn: $s.bottomQuarterOnly)
+            ToggleRow(icon: "cursorarrow", title: "Freeze Cursor",
+                      subtitle: "Pointer stays put while sliding", isOn: $s.freezeCursor)
+            Divider()
+            SectionTitle(text: "Feedback")
+            HStack(spacing: 12) {
+                Badge(symbol: "hand.tap.fill")
+                Text("Haptic Feedback").font(.system(size: 13, weight: .medium))
+                Spacer()
+                Picker("", selection: $s.haptic) {
+                    ForEach(Haptic.allCases) { Text($0.label).tag($0) }
+                }.labelsHidden().pickerStyle(.menu).frame(width: 90)
+            }
+            ToggleRow(icon: "percent", title: "Show Percentage",
+                      subtitle: "Show the value on the slider pill", isOn: $s.showPercent)
+            Divider()
+            SectionTitle(text: "Corner Taps")
+            ToggleRow(icon: "speaker.slash.fill", title: "Quick Mute",
+                      subtitle: "Double-tap the \(s.cornerEdge.word)-right corner", isOn: $s.quickMute)
+            ToggleRow(icon: "airpods", title: "Switch Output",
+                      subtitle: "Double-tap the \(s.cornerEdge.word)-left corner", isOn: $s.switchOutput)
+            HStack(spacing: 12) {
+                Badge(symbol: "rectangle.inset.filled")
+                Text("Corner Position").font(.system(size: 13, weight: .medium))
+                Spacer()
+                Picker("", selection: $s.cornerEdge) {
+                    ForEach(CornerEdge.allCases) { Text($0.label).tag($0) }
+                }.labelsHidden().pickerStyle(.menu).frame(width: 90)
+            }
+            Divider()
+            SectionTitle(text: "General")
+            LoginRow()
+            ToggleRow(icon: "arrow.triangle.2.circlepath", title: "Check for Updates Automatically",
+                      subtitle: "Version \(version)",
+                      isOn: Binding(get: { updater.automaticChecks }, set: { updater.automaticChecks = $0 }))
+        }
+        .padding(20)
+        .frame(width: 400)
+    }
+}
+
+enum SettingsWindow {
+    private static var window: NSWindow?
+
+    static func show() {
+        if window == nil {
+            let host = NSHostingController(rootView: AllSettingsView())
+            let w = NSWindow(contentViewController: host)
+            w.title = "EdgeSlider Settings"
+            w.styleMask = [.titled, .closable]
+            w.isReleasedWhenClosed = false
+            w.center()
+            window = w
+        }
+        window?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 }

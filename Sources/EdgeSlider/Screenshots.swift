@@ -21,14 +21,15 @@ enum Screenshots {
     static func render(to dir: String) {
         try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         isRendering = true
-        write(panel(), to: "\(dir)/panel.png")
+        write(panel(PopoverRoot()), to: "\(dir)/panel.png")
+        write(panel(AllSettingsView()), to: "\(dir)/settings.png")
         write(hud(), to: "\(dir)/hud.png")
     }
 
     // MARK: panel (the real SwiftUI view, hosted offscreen so native controls draw)
 
-    private static func panel() -> NSBitmapImageRep {
-        let host = NSHostingView(rootView: PopoverRoot()
+    private static func panel<V: View>(_ root: V) -> NSBitmapImageRep {
+        let host = NSHostingView(rootView: root
             .background(Color(white: 0.17))
             .environment(\.colorScheme, .dark)
             .environment(\.controlActiveState, .key))
@@ -52,7 +53,7 @@ enum Screenshots {
         // fall back to drawing the view into a bitmap if screencapture is unavailable.
         var rep = host.bitmapImageRepForCachingDisplay(in: host.bounds)!
         host.cacheDisplay(in: host.bounds, to: rep)
-        let tmp = NSTemporaryDirectory() + "edgeslider-panel.png"
+        let tmp = NSTemporaryDirectory() + "edgeslider-panel-\(UUID().uuidString).png"
         let cap = Process()
         cap.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
         cap.arguments = ["-x", "-o", "-l", "\(win.windowNumber)", tmp]

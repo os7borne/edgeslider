@@ -2,6 +2,11 @@
 
 All notable changes to EdgeSlider are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.5.2] - 2026-11-04
+
+### Changed
+- The collapsed "Advanced" section is replaced by an "All Settings…" button that opens a separate settings window. The panel stays short.
+
 ## [1.5.1] - 2026-11-04
 
 ### Changed
