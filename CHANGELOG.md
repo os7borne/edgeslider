@@ -2,6 +2,12 @@
 
 All notable changes to EdgeSlider are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.5] - 2026-11-04
+
+### Changed
+- The menu bar panel is a single page: Sensitivity, Haptic Feedback, Swap Sides, Quick Mute, Switch Output, Open at Login. Edge Width, Hold Delay, Bottom Quarter Only, Corner Position, Show Percentage, Freeze Cursor and the update toggle are no longer shown (they keep their defaults).
+- Only one instance of the app runs at a time.
+
 ## [1.4] - 2026-11-04
 
 ### Added

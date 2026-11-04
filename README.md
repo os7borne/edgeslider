@@ -47,16 +47,12 @@ EdgeSlider keeps itself up to date: it checks for new versions daily and the men
 |---|---|
 | Slide along the **left edge** | Brightness (built-in display) |
 | Slide along the **right edge** | Volume |
-| Double-tap the **top-right corner** | Mute (off by default, see below). Can be moved to the bottom corners in Settings |
-| Double-tap the **top-left corner** | Switch the sound output to the next connected device (off by default, see below). Can be moved to the bottom corners in Settings |
+| Double-tap the **top-right corner** | Mute (off by default, see below). |
+| Double-tap the **top-left corner** | Switch the sound output to the next connected device (off by default, see below). |
 
 A touch only counts if it **lands on the edge** and then moves, so a stray fingertip or a normal swipe across the pad does nothing. Sliding is relative to the current level, so nothing jumps when you touch down.
 
-Everything is adjustable from the menu bar panel: haptic strength, sensitivity, how wide the edge zones are, swapping the two sides, limiting the sliders to the lower part of the pad, showing or hiding the percentage, freezing the pointer, and launch at login.
-
-<p align="center">
-  <img src="docs/images/settings.png" height="520" alt="The Settings page">
-</p>
+The menu bar panel keeps it simple: sensitivity, haptic strength, swapping the two sides, the two corner taps, and launch at login.
 
 ## Good to know
 

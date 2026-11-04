@@ -669,6 +669,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ n: Notification) { controller.end() }
 }
 
+// one instance only: if another copy is already running, leave it alone and quit this one
+if !CommandLine.arguments.contains("--render-screenshots"),
+   let id = Bundle.main.bundleIdentifier,
+   NSRunningApplication.runningApplications(withBundleIdentifier: id)
+       .contains(where: { $0.processIdentifier != ProcessInfo.processInfo.processIdentifier }) {
+    exit(0)
+}
+
 let app = NSApplication.shared
 app.setActivationPolicy(.accessory)
 let delegate = AppDelegate()

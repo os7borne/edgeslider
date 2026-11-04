@@ -70,27 +70,19 @@ private struct SliderRow: View {
     }
 }
 
-private struct SectionTitle: View {
-    let text: String
-    var body: some View {
-        Text(text).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary).padding(.top, 2)
-    }
-}
-
 struct PopoverRoot: View {
     @ObservedObject private var s = Settings.shared
     @ObservedObject private var updater = Updater.shared
-    @State private var page: Int
     @State private var loginOn = SMAppService.mainApp.status == .enabled
     @State private var loginNote: String?
 
-    init(page: Int = 0) { _page = State(initialValue: page) }
+    private var version: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "" }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             header
             if let v = updater.availableVersion { updateBanner(v) }
-            if page == 0 { mainPage } else { settingsPage }
+            controls
             Divider()
             footer
             credit
@@ -108,7 +100,7 @@ struct PopoverRoot: View {
                 .resizable().interpolation(.high)
                 .frame(width: 36, height: 36)
                 .accessibilityHidden(true)
-            Text(page == 0 ? "EdgeSlider" : "Settings").font(.system(size: 15, weight: .semibold))
+            Text("EdgeSlider").font(.system(size: 15, weight: .semibold))
             Spacer()
             Circle().fill(s.enabled ? Color.green : Color.gray).frame(width: 8, height: 8)
             Text(s.enabled ? "Ready" : "Paused").font(.system(size: 12)).foregroundStyle(.secondary)
@@ -118,12 +110,8 @@ struct PopoverRoot: View {
 
     private var footer: some View {
         HStack {
-            if page == 0 {
-                Button { page = 1 } label: { Label("Settings", systemImage: "gearshape") }
-            } else {
-                Button { page = 0 } label: { Label("Back", systemImage: "chevron.left") }
-                Text("Version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.1")").font(.system(size: 11)).foregroundStyle(.secondary).padding(.leading, 6)
-            }
+            Button("Check for Updates…") { updater.checkForUpdates() }
+            Text("v\(version)").font(.system(size: 11)).foregroundStyle(.secondary).padding(.leading, 4)
             Spacer()
             Button { NSApp.terminate(nil) } label: { Image(systemName: "power") }.help("Quit EdgeSlider")
         }
@@ -155,93 +143,34 @@ struct PopoverRoot: View {
         .background(RoundedRectangle(cornerRadius: 10).fill(Color.accentOrange.opacity(0.14)))
     }
 
-    // MARK: pages
+    // MARK: controls
 
-    private var mainPage: some View {
+    private var controls: some View {
         VStack(alignment: .leading, spacing: 14) {
+            SliderRow(icon: "gauge.with.dots.needle.33percent", title: "Sensitivity",
+                      valueText: String(format: "%.1f×", s.sensitivity),
+                      value: Binding(get: { Double(s.sensitivity) }, set: { s.sensitivity = Float($0) }),
+                      range: 0.5...3.0, step: 0.1)
             HStack(spacing: 12) {
                 Badge(symbol: "hand.tap.fill")
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Haptic Feedback").font(.system(size: 13, weight: .medium))
-                    Text("Clicks as you slide").font(.system(size: 11)).foregroundStyle(.secondary)
-                }
+                Text("Haptic Feedback").font(.system(size: 13, weight: .medium))
                 Spacer()
                 Picker("", selection: $s.haptic) {
                     ForEach(Haptic.allCases) { Text($0.label).tag($0) }
                 }.labelsHidden().pickerStyle(.menu).frame(width: 90)
             }
+            ToggleRow(icon: "arrow.left.arrow.right", title: "Swap Sides",
+                      subtitle: s.swapSides ? "Left: Volume · Right: Brightness" : "Left: Brightness · Right: Volume",
+                      isOn: $s.swapSides)
+            Divider()
             ToggleRow(icon: "speaker.slash.fill", title: "Quick Mute",
                       subtitle: "Double-tap the \(s.cornerEdge.word)-right corner", isOn: $s.quickMute)
             ToggleRow(icon: "airpods", title: "Switch Output",
                       subtitle: "Double-tap the \(s.cornerEdge.word)-left corner", isOn: $s.switchOutput)
             Divider()
-            SliderRow(icon: "gauge.with.dots.needle.33percent", title: "Sensitivity",
-                      valueText: String(format: "%.1f×", s.sensitivity),
-                      value: Binding(get: { Double(s.sensitivity) }, set: { s.sensitivity = Float($0) }),
-                      range: 0.5...3.0, step: 0.1)
-            SliderRow(icon: "arrow.left.and.right", title: "Edge Width",
-                      valueText: "\(Int((s.edgeWidth * 100).rounded()))%",
-                      value: Binding(get: { Double(s.edgeWidth * 100) }, set: { s.edgeWidth = Float($0 / 100) }),
-                      range: 3...12, step: 1)
-        }
-    }
-
-    private var settingsPage: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            SectionTitle(text: "Edge Gestures")
-            SliderRow(icon: "hand.raised.fill", title: "Hold Delay",
-                      valueText: s.holdDelay < 0.01 ? "Off" : "\(Int((s.holdDelay * 1000).rounded())) ms",
-                      value: Binding(get: { Double(s.holdDelay) }, set: { s.holdDelay = Float($0) }),
-                      range: 0...0.5, step: 0.05)
-            ToggleRow(icon: "arrow.left.arrow.right", title: "Swap Sides",
-                      subtitle: s.swapSides ? "Left: Volume · Right: Brightness" : "Left: Brightness · Right: Volume",
-                      isOn: $s.swapSides)
-            ToggleRow(icon: "rectangle.bottomhalf.filled", title: "Bottom Quarter Only",
-                      subtitle: "Ignore touches above the lower 25%", isOn: $s.bottomQuarterOnly)
-            Divider()
-            SectionTitle(text: "Corner Taps")
-            HStack(spacing: 12) {
-                Badge(symbol: "rectangle.inset.filled")
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Corner Position").font(.system(size: 13, weight: .medium))
-                    Text("Where Quick Mute and Switch Output listen").font(.system(size: 11)).foregroundStyle(.secondary)
-                }
-                Spacer()
-                Picker("", selection: $s.cornerEdge) {
-                    ForEach(CornerEdge.allCases) { Text($0.label).tag($0) }
-                }.labelsHidden().pickerStyle(.menu).frame(width: 90)
-            }
-            Divider()
-            SectionTitle(text: "Display")
-            ToggleRow(icon: "percent", title: "Show Percentage",
-                      subtitle: "Show the value on the slider pill", isOn: $s.showPercent)
-            Divider()
-            SectionTitle(text: "While Sliding")
-            ToggleRow(icon: "cursorarrow", title: "Freeze Cursor",
-                      subtitle: "Pointer stays put while sliding", isOn: $s.freezeCursor)
-            Divider()
-            SectionTitle(text: "General")
             ToggleRow(icon: "power", title: "Open at Login",
                       subtitle: loginNote ?? "Start EdgeSlider when you log in",
                       isOn: Binding(get: { loginOn }, set: setLogin))
-            Divider()
-            SectionTitle(text: "Updates")
-            ToggleRow(icon: "arrow.triangle.2.circlepath", title: "Check Automatically",
-                      subtitle: "Look for new versions daily",
-                      isOn: Binding(get: { updater.automaticChecks }, set: { updater.automaticChecks = $0 }))
-            Button { updater.checkForUpdates() } label: {
-                HStack(spacing: 12) {
-                    Badge(symbol: "arrow.down.circle")
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("Check for Updates…").font(.system(size: 13, weight: .medium))
-                        Text("You have version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "")")
-                            .font(.system(size: 11)).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
         }
     }
 
