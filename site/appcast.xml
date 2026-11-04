@@ -3,6 +3,19 @@
     <channel>
         <title>EdgeSlider</title>
         <item>
+            <title>1.5</title>
+            <pubDate>Wed, 04 Nov 2026 14:15:23 +0800</pubDate>
+            <sparkle:version>8</sparkle:version>
+            <sparkle:shortVersionString>1.5</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+            <description sparkle:format="markdown"><![CDATA[## EdgeSlider 1.5
+
+- Simpler menu bar panel: one page with Sensitivity, Haptic Feedback, Swap Sides, Quick Mute, Switch Output and Open at Login. The separate Settings page is gone.
+- Only one copy of EdgeSlider can run at a time. Opening it again no longer starts a second one.
+]]></description>
+            <enclosure url="https://github.com/os7borne/edgeslider/releases/download/v1.5/EdgeSlider.zip" length="2347968" type="application/octet-stream" sparkle:edSignature="pvL1b8hNNIuR4Wz6VQP8ywAUETpYyBnu8tFxb0sEz7gHzMNWznx3ar7MvvVx+Ir9XRLUoC4FPgRyreLrFESxCg=="/>
+        </item>
+        <item>
             <title>1.4</title>
             <pubDate>Wed, 04 Nov 2026 01:04:18 +0800</pubDate>
             <sparkle:version>7</sparkle:version>
@@ -27,18 +40,6 @@
 - The on-screen indicators now appear over full-screen apps.
 ]]></description>
             <enclosure url="https://github.com/os7borne/edgeslider/releases/download/v1.3.3/EdgeSlider.zip" length="2365240" type="application/octet-stream" sparkle:edSignature="Ub+BvhvI89DMRmQ+/NOJ1Lw2rQpoy2MG8LMYYrb8Veh2g4ZRgMcABmzkq5dQ+cE3GPtvvmfEF/qXdWjOnYSzBQ=="/>
-        </item>
-        <item>
-            <title>1.3.2</title>
-            <pubDate>Tue, 03 Nov 2026 14:38:01 +0800</pubDate>
-            <sparkle:version>5</sparkle:version>
-            <sparkle:shortVersionString>1.3.2</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
-            <description sparkle:format="markdown"><![CDATA[## EdgeSlider 1.3.2
-
-- Fewer accidental triggers: the corner double-taps now ignore touches while you are typing, and both taps must land in the same spot.
-]]></description>
-            <enclosure url="https://github.com/os7borne/edgeslider/releases/download/v1.3.2/EdgeSlider.zip" length="2365246" type="application/octet-stream" sparkle:edSignature="C3nYFi4x+6m73ofLtiDatdidLZm9Y9Gh9/U9MNwA4v/5hso4qgQureVWS8g6yb2Ib7+LZmvMkZg4qfAw67Y3AA=="/>
         </item>
     </channel>
 </rss>
