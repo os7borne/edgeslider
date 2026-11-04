@@ -75,6 +75,7 @@ struct PopoverRoot: View {
     @ObservedObject private var updater = Updater.shared
     @State private var loginOn = SMAppService.mainApp.status == .enabled
     @State private var loginNote: String?
+    @State private var showAdvanced = false
 
     private var version: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "" }
 
@@ -171,6 +172,55 @@ struct PopoverRoot: View {
             ToggleRow(icon: "power", title: "Open at Login",
                       subtitle: loginNote ?? "Start EdgeSlider when you log in",
                       isOn: Binding(get: { loginOn }, set: setLogin))
+            Divider()
+            advanced
+        }
+    }
+
+    // MARK: advanced (collapsed by default)
+
+    private var advanced: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Button { withAnimation(.easeInOut(duration: 0.15)) { showAdvanced.toggle() } } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: showAdvanced ? "chevron.down" : "chevron.right").font(.system(size: 10, weight: .semibold))
+                    Text("Advanced").font(.system(size: 12, weight: .medium))
+                    Spacer()
+                }
+                .foregroundStyle(.secondary)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            if showAdvanced {
+                SliderRow(icon: "arrow.left.and.right", title: "Edge Width",
+                          valueText: "\(Int((s.edgeWidth * 100).rounded()))%",
+                          value: Binding(get: { Double(s.edgeWidth * 100) }, set: { s.edgeWidth = Float($0 / 100) }),
+                          range: 3...12, step: 1)
+                SliderRow(icon: "hand.raised.fill", title: "Hold Delay",
+                          valueText: s.holdDelay < 0.01 ? "Off" : "\(Int((s.holdDelay * 1000).rounded())) ms",
+                          value: Binding(get: { Double(s.holdDelay) }, set: { s.holdDelay = Float($0) }),
+                          range: 0...0.5, step: 0.05)
+                ToggleRow(icon: "rectangle.bottomhalf.filled", title: "Bottom Quarter Only",
+                          subtitle: "Ignore touches above the lower 25%", isOn: $s.bottomQuarterOnly)
+                HStack(spacing: 12) {
+                    Badge(symbol: "rectangle.inset.filled")
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Corner Position").font(.system(size: 13, weight: .medium))
+                        Text("Where the corner taps listen").font(.system(size: 11)).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Picker("", selection: $s.cornerEdge) {
+                        ForEach(CornerEdge.allCases) { Text($0.label).tag($0) }
+                    }.labelsHidden().pickerStyle(.menu).frame(width: 90)
+                }
+                ToggleRow(icon: "percent", title: "Show Percentage",
+                          subtitle: "Show the value on the slider pill", isOn: $s.showPercent)
+                ToggleRow(icon: "cursorarrow", title: "Freeze Cursor",
+                          subtitle: "Pointer stays put while sliding", isOn: $s.freezeCursor)
+                ToggleRow(icon: "arrow.triangle.2.circlepath", title: "Check for Updates Automatically",
+                          subtitle: "Look for new versions daily",
+                          isOn: Binding(get: { updater.automaticChecks }, set: { updater.automaticChecks = $0 }))
+            }
         }
     }
 
