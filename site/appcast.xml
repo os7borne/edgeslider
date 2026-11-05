@@ -3,6 +3,18 @@
     <channel>
         <title>EdgeSlider</title>
         <item>
+            <title>1.5.4</title>
+            <pubDate>Thu, 05 Nov 2026 11:18:18 +0530</pubDate>
+            <sparkle:version>12</sparkle:version>
+            <sparkle:shortVersionString>1.5.4</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+            <description sparkle:format="markdown"><![CDATA[## EdgeSlider 1.5.4
+
+- The All Settings window now has a fixed height and scrolls, instead of growing to fit every option.
+]]></description>
+            <enclosure url="https://github.com/os7borne/edgeslider/releases/download/v1.5.4/EdgeSlider.zip" length="2411473" type="application/octet-stream" sparkle:edSignature="XPCxDHYvRtxp0vz7GS+hi2Q0QlDcaVG6+npakegxUBFwdHP5W+AuaRCrvw0eyWT0Qh4jE/xXUfMeMvp2StdYCw=="/>
+        </item>
+        <item>
             <title>1.5.3</title>
             <pubDate>Thu, 05 Nov 2026 11:06:48 +0530</pubDate>
             <sparkle:version>11</sparkle:version>
@@ -28,18 +40,6 @@
 - All the extra options now live in their own window: click "All Settings…" at the bottom of the menu bar panel. The panel itself stays short and simple.
 ]]></description>
             <enclosure url="https://github.com/os7borne/edgeslider/releases/download/v1.5.2/EdgeSlider.zip" length="2372383" type="application/octet-stream" sparkle:edSignature="R3VlPgkKWo5QFA/FzaC0mWW2f/Ab36f/rPBGwcoy4dHksLNkxpTfxTny0qYVNYJ3mMxLcQb2SThswitKvFzDDA=="/>
-        </item>
-        <item>
-            <title>1.5.1</title>
-            <pubDate>Wed, 04 Nov 2026 14:23:16 +0800</pubDate>
-            <sparkle:version>9</sparkle:version>
-            <sparkle:shortVersionString>1.5.1</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
-            <description sparkle:format="markdown"><![CDATA[## EdgeSlider 1.5.1
-
-- The options hidden in 1.5 are back under a collapsed "Advanced" section in the menu bar panel: Edge Width, Hold Delay, Bottom Quarter Only, Corner Position, Show Percentage, Freeze Cursor and automatic update checks. The main view stays simple.
-]]></description>
-            <enclosure url="https://github.com/os7borne/edgeslider/releases/download/v1.5.1/EdgeSlider.zip" length="2376714" type="application/octet-stream" sparkle:edSignature="N5sb8/gC3iXFo08mGfIjRM4+19CCG+LFiCJEGUlv6ORO64iVJ/zl2TlmKVgY4BiFjF5wZjpqaG7JyaVSOVsDDg=="/>
         </item>
     </channel>
 </rss>
