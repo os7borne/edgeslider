@@ -2,6 +2,11 @@
 
 All notable changes to EdgeSlider are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.5.4] - 2026-11-05
+
+### Changed
+- The All Settings window has a fixed height and scrolls instead of growing to fit every option.
+
 ## [1.5.3] - 2026-11-05
 
 ### Fixed
