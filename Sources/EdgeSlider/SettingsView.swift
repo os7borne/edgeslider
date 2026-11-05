@@ -206,6 +206,11 @@ struct AllSettingsView: View {
     private var version: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "" }
 
     var body: some View {
+        ScrollView(.vertical, showsIndicators: true) { content }
+            .frame(width: 400, height: 460)          // fixed window size; the settings scroll inside it
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: 14) {
             SectionTitle(text: "Sliding")
             SliderRow(icon: "gauge.with.dots.needle.33percent", title: "Sensitivity",
@@ -261,7 +266,7 @@ struct AllSettingsView: View {
                       isOn: Binding(get: { updater.automaticChecks }, set: { updater.automaticChecks = $0 }))
         }
         .padding(20)
-        .frame(width: 400)
+        .frame(width: 400, alignment: .leading)
     }
 }
 
