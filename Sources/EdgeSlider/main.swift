@@ -3,6 +3,9 @@
 
 import Cocoa
 import CoreAudio
+import os
+
+let log = Logger(subsystem: "vc.osborne.edgeslider", category: "input")
 
 // MARK: - Settings
 
@@ -151,12 +154,76 @@ enum Brightness {
     static let lib = dlopen("/System/Library/PrivateFrameworks/DisplayServices.framework/DisplayServices", RTLD_LAZY)
     static let getFn: GetFn? = lib.flatMap { dlsym($0, "DisplayServicesGetBrightness") }.map { unsafeBitCast($0, to: GetFn.self) }
     static let setFn: SetFn? = lib.flatMap { dlsym($0, "DisplayServicesSetBrightness") }.map { unsafeBitCast($0, to: SetFn.self) }
-    static func get() -> Float {
+    /// The built-in panel is the only display DisplayServices can dim reliably. `CGMainDisplayID()` changes with
+    /// external displays and after wake, so look the built-in one up instead and cache it for the gesture.
+    private(set) static var target = CGMainDisplayID()
+    private static func refreshTarget() {
+        var ids = [CGDirectDisplayID](repeating: 0, count: 16); var count: UInt32 = 0
+        if CGGetOnlineDisplayList(16, &ids, &count) == .success,
+           let builtin = ids.prefix(Int(count)).first(where: { CGDisplayIsBuiltin($0) != 0 }) {
+            target = builtin
+        } else {
+            target = CGMainDisplayID()
+        }
+    }
+    /// nil when the current brightness cannot be read (never pretend it is 0%).
+    static func get() -> Float? {
+        guard let getFn = getFn else { return nil }
+        refreshTarget()
         var v: Float = 0
-        _ = getFn?(CGMainDisplayID(), &v)
+        let r = getFn(target, &v)
+        if r != 0 { log.error("DisplayServicesGetBrightness failed (\(r)) for display \(target)"); return nil }
         return v
     }
-    static func set(_ value: Float) { _ = setFn?(CGMainDisplayID(), min(max(value, 0), 1)) }
+    static func set(_ value: Float) {
+        let r = setFn?(target, min(max(value, 0), 1)) ?? -1
+        if r != 0 { log.error("DisplayServicesSetBrightness failed (\(r)) for display \(target)") }
+    }
+}
+
+/// Applies only the newest value, off the touch thread. If a hardware call hangs, the queue is abandoned
+/// after 2 s and replaced, so one stuck call can no longer disable the control until relaunch.
+final class Coalescer {
+    private let label: String
+    private let apply: (Float) -> Void
+    private var queue: DispatchQueue
+    private let lock = NSLock()
+    private var pending: Float?
+    private var scheduled = false
+    private var runningSince = 0.0          // 0 = not inside apply()
+    private var epoch = 0
+
+    init(label: String, apply: @escaping (Float) -> Void) {
+        self.label = label; self.apply = apply
+        queue = DispatchQueue(label: label, qos: .userInteractive)
+    }
+
+    func push(_ v: Float) {
+        let now = CFAbsoluteTimeGetCurrent()
+        lock.lock()
+        pending = v
+        if scheduled {
+            if runningSince != 0 && now - runningSince > 2 {
+                log.error("\(self.label) hung for 2s, abandoning its queue")
+                epoch += 1; scheduled = false; runningSince = 0
+                queue = DispatchQueue(label: label, qos: .userInteractive)
+            } else { lock.unlock(); return }
+        }
+        scheduled = true
+        let e = epoch, q = queue
+        lock.unlock()
+        q.async { [self] in
+            while true {
+                lock.lock()
+                guard e == epoch else { lock.unlock(); return }          // abandoned
+                guard let p = pending else { scheduled = false; runningSince = 0; lock.unlock(); return }
+                pending = nil; runningSince = CFAbsoluteTimeGetCurrent()
+                lock.unlock()
+                apply(p)
+                lock.lock(); if e == epoch { runningSince = 0 }; lock.unlock()
+            }
+        }
+    }
 }
 
 // MARK: - HUD
@@ -266,7 +333,7 @@ final class HUD {
         generation += 1
         let gen = generation
 
-        if !visible || side != shownSide {
+        if !visible || !window.isVisible || side != shownSide {
             // start fully off-screen on the correct edge
             window.alphaValue = 0
             window.setFrame(NSRect(x: offX, y: y, width: size.width, height: size.height), display: false)
@@ -290,6 +357,14 @@ final class HUD {
                 }
             }
         }
+    }
+
+    /// Forgets any in-flight animation and hides the pill (sleep/wake, display changes). Main thread.
+    func reset() {
+        generation += 1
+        window.orderOut(nil)
+        window.alphaValue = 0
+        visible = false; hiding = false
     }
 
     private func slide(to frame: NSRect, alpha: CGFloat, duration: TimeInterval,
@@ -414,22 +489,32 @@ final class EdgeController {
     private var lastTap: [Corner: (t: Double, x: Float, y: Float)] = [:]   // first tap of a pending double-tap
     private let deviceHUD = DeviceHUD()
 
-    // coalesced output: only the newest value is ever applied
-    private let applyQueue = DispatchQueue(label: "edgeslider.apply", qos: .userInteractive)
-    private let lock = NSLock()
-    private var pending: (Bool, Float)?
+    // Touch frames arrive on one thread per device, and sleep/wake handlers run on main: all gesture state is guarded.
+    private let stateLock = NSLock()
+    private var activeDevice: UnsafeMutableRawPointer?
+    private var lastFrame = 0.0
+
+    // coalesced output: only the newest value is ever applied; brightness and volume never block each other
+    private let brightnessOut = Coalescer(label: "edgeslider.brightness") { Brightness.set($0) }
+    private let volumeOut = Coalescer(label: "edgeslider.volume") { Volume.set($0) }
+    private let actionQueue = DispatchQueue(label: "edgeslider.action", qos: .userInteractive)
 
     private func isBrightness(_ s: Side) -> Bool { (s == .left) != cfg.swapSides }
     private var volumeSide: Side { cfg.swapSides ? .left : .right }
 
     private func push(brightness: Bool, _ value: Float) {
-        lock.lock(); let busy = pending != nil; pending = (brightness, value); lock.unlock()
-        if busy { return }
-        applyQueue.async { [self] in
-            lock.lock(); let p = pending; pending = nil; lock.unlock()
-            guard let (isB, v) = p else { return }
-            if isB { Brightness.set(v) } else { Volume.set(v) }
-        }
+        (brightness ? brightnessOut : volumeOut).push(value)
+    }
+
+    /// True when no finger is being tracked (safe moment to rebuild the device list).
+    var isIdle: Bool { stateLock.lock(); defer { stateLock.unlock() }; return trackedID == -1 }
+
+    /// Drops any gesture in progress and releases the pointer. Call on sleep, wake and display changes (main thread).
+    func reset() {
+        stateLock.lock()
+        end(); trackedID = -1; corner = .none; lastTap = [:]; activeDevice = nil
+        stateLock.unlock()
+        hud.reset()
     }
 
     private func perform(_ p: NSHapticFeedbackManager.FeedbackPattern) {
@@ -443,8 +528,13 @@ final class EdgeController {
     private func bumpHaptic() { if cfg.haptic != .off { perform(.levelChange) } }
 
     // Called on the multitouch callback thread with the single touch (nil if no finger is touching or >1 fingers)
-    func update(touch: (id: Int32, x: Float, y: Float)?, count: Int32) {
+    func update(device: UnsafeMutableRawPointer?, touch: (id: Int32, x: Float, y: Float)?, count: Int32) {
+        stateLock.lock(); defer { stateLock.unlock() }
         let now = CFAbsoluteTimeGetCurrent()
+        // a second multitouch device (second trackpad) must not hijack a gesture already in progress
+        if trackedID != -1, let d = device, let a = activeDevice, d != a { return }
+        activeDevice = device
+        lastFrame = now
         guard cfg.enabled else { end(); trackedID = -1; return }
         guard let t = touch else {
             if count <= 1 { finishTap(now) }
@@ -499,9 +589,11 @@ final class EdgeController {
     }
 
     private func begin(_ s: Side, _ t: (id: Int32, x: Float, y: Float)) {
-        side = s; lastY = t.y
         let b = isBrightness(s)
-        value = b ? Brightness.get() : Volume.get()
+        // never engage on an unreadable brightness: starting from a fake 0% would blank the screen or do nothing
+        guard let startValue = b ? Brightness.get() : Optional(Volume.get()) else { landedInEdge = false; return }
+        side = s; lastY = t.y
+        value = startValue
         let steps: Float = cfg.haptic == .light ? 10 : 20
         lastTick = Int((value * steps).rounded()); atLimit = false
         if cfg.freezeCursor {
@@ -511,6 +603,20 @@ final class EdgeController {
         }
         bumpHaptic()                                     // "grabbed the control"
         hud.show(s, brightness: b, value)
+        armFrameWatchdog()
+    }
+
+    /// If frames stop while a gesture is engaged (sleep, device drop), release the frozen pointer instead of keeping it.
+    private func armFrameWatchdog() {
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            guard let self = self else { return }
+            self.stateLock.lock(); defer { self.stateLock.unlock() }
+            guard self.side != nil else { return }
+            if CFAbsoluteTimeGetCurrent() - self.lastFrame > 1.5 {
+                log.error("no touch frames for 1.5s during a gesture, releasing")
+                self.end(); self.trackedID = -1
+            } else { self.armFrameWatchdog() }
+        }
     }
 
     func end() {
@@ -536,12 +642,12 @@ final class EdgeController {
         bumpHaptic()
         if corner == .right {
             let vs = volumeSide
-            applyQueue.async { [self] in
+            actionQueue.async { [self] in
                 let m = Volume.toggleMute()
                 hud.show(vs, brightness: false, m ? 0 : Volume.get())
             }
         } else {
-            applyQueue.async { [self] in
+            actionQueue.async { [self] in
                 if let d = AudioOutput.cycle() { deviceHUD.show(d) }
             }
         }
@@ -562,7 +668,14 @@ private let normXOffset = 32          // normalized.position.x (Float)
 private let identifierOffset = 16
 private let stateOffset = 20
 
-let mtCallback: MTCallback = { _, data, count, _, _ in
+typealias MTUnregister = @convention(c) (UnsafeMutableRawPointer, MTCallback) -> Void
+typealias MTStop = @convention(c) (UnsafeMutableRawPointer) -> Void
+typealias MTDimensions = @convention(c) (UnsafeMutableRawPointer, UnsafeMutablePointer<Int32>, UnsafeMutablePointer<Int32>) -> Int32
+
+var framesSinceStart = 0
+
+let mtCallback: MTCallback = { dev, data, count, _, _ in
+    framesSinceStart &+= 1
     var touch: (id: Int32, x: Float, y: Float)? = nil
     if count == 1, let d = data {
         let state = d.load(fromByteOffset: stateOffset, as: Int32.self)
@@ -572,24 +685,99 @@ let mtCallback: MTCallback = { _, data, count, _, _ in
                      d.load(fromByteOffset: normXOffset + 4, as: Float.self))
         }
     }
-    controller.update(touch: touch, count: count)
+    controller.update(device: dev, touch: touch, count: count)
     return 0
 }
 
-func startMultitouch() -> Bool {
-    guard let lib = dlopen("/System/Library/PrivateFrameworks/MultitouchSupport.framework/MultitouchSupport", RTLD_LAZY),
-          let c = dlsym(lib, "MTDeviceCreateList"), let r = dlsym(lib, "MTRegisterContactFrameCallback"),
-          let s = dlsym(lib, "MTDeviceStart") else { return false }
-    let create = unsafeBitCast(c, to: MTCreateList.self)
-    let register = unsafeBitCast(r, to: MTRegister.self)
-    let start = unsafeBitCast(s, to: MTStart.self)
-    guard let list = create()?.takeRetainedValue() else { return false }
-    for i in 0..<CFArrayGetCount(list) {
-        let dev = UnsafeMutableRawPointer(mutating: CFArrayGetValueAtIndex(list, i))!
-        register(dev, mtCallback)
-        start(dev, 0)
+/// Owns the private MultitouchSupport devices. The device list is kept alive while callbacks are registered
+/// (releasing it left dangling device pointers), and can be rebuilt after sleep, display changes or a reconnect.
+final class MultitouchManager {
+    static let shared = MultitouchManager()
+
+    private let create: MTCreateList?, register: MTRegister?, startFn: MTStart?
+    private let unregister: MTUnregister?, stopFn: MTStop?, dims: MTDimensions?
+    private var devices: CFArray?
+    private var active: [UnsafeMutableRawPointer] = []
+    private var restartToken = 0
+    private var lastRestart = 0.0
+
+    private init() {
+        let lib = dlopen("/System/Library/PrivateFrameworks/MultitouchSupport.framework/MultitouchSupport", RTLD_LAZY)
+        func sym<T>(_ name: String, _ type: T.Type) -> T? {
+            lib.flatMap { dlsym($0, name) }.map { unsafeBitCast($0, to: type) }
+        }
+        create = sym("MTDeviceCreateList", MTCreateList.self)
+        register = sym("MTRegisterContactFrameCallback", MTRegister.self)
+        startFn = sym("MTDeviceStart", MTStart.self)
+        unregister = sym("MTUnregisterContactFrameCallback", MTUnregister.self)
+        stopFn = sym("MTDeviceStop", MTStop.self)
+        dims = sym("MTDeviceGetSensorSurfaceDimensions", MTDimensions.self)
     }
-    return CFArrayGetCount(list) > 0
+
+    private func allDevices(in list: CFArray) -> [UnsafeMutableRawPointer] {
+        (0..<CFArrayGetCount(list)).compactMap { CFArrayGetValueAtIndex(list, $0).map { UnsafeMutableRawPointer(mutating: $0) } }
+    }
+
+    /// Trackpads only: a Magic Mouse is also a multitouch device (taller than wide), and its touches are not edge gestures.
+    private func trackpads(in list: CFArray) -> [UnsafeMutableRawPointer] {
+        let all = allDevices(in: list)
+        let pads = all.filter { dev in
+            guard let dims = dims else { return true }
+            var w: Int32 = 0, h: Int32 = 0
+            guard dims(dev, &w, &h) == 0, w > 0, h > 0 else { return true }
+            return w >= h
+        }
+        return pads.isEmpty ? all : pads            // never end up with no device because of the heuristic
+    }
+
+    /// Main thread. Returns false if no device could be started.
+    @discardableResult
+    func start() -> Bool {
+        stop()
+        guard let create = create, let register = register, let startFn = startFn,
+              let list = create()?.takeRetainedValue() else { return false }
+        devices = list
+        active = trackpads(in: list)
+        for dev in active { register(dev, mtCallback); startFn(dev, 0) }
+        lastRestart = CFAbsoluteTimeGetCurrent()
+        log.notice("multitouch started: \(self.active.count) of \(CFArrayGetCount(list)) devices, \(framesSinceStart) frames since launch")
+        return !active.isEmpty
+    }
+
+    func stop() {
+        for dev in active { unregister?(dev, mtCallback); stopFn?(dev) }
+        active = []; devices = nil
+    }
+
+    /// Debounced restart, for wake and display notifications (devices are often not ready right away).
+    func scheduleRestart(_ reason: String, after delay: TimeInterval) {
+        restartToken += 1
+        let token = restartToken
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [self] in
+            guard token == restartToken else { return }
+            log.notice("restarting multitouch: \(reason)")
+            controller.reset()
+            start()
+        }
+    }
+
+    /// Cheap self-heal when the user opens the panel (they may be doing it because the sliders stopped working).
+    func restartIfStale() {
+        guard CFAbsoluteTimeGetCurrent() - lastRestart > 60, controller.isIdle else { return }
+        log.notice("restarting multitouch: panel opened")
+        start()
+    }
+
+    /// Periodic check: if the set of trackpads changed (reconnect, hot-plug), rebuild.
+    func checkDevices() {
+        guard controller.isIdle, let create = create, let list = create()?.takeRetainedValue() else { return }
+        let fresh = Set(trackpads(in: list).map { UInt(bitPattern: $0) })
+        let current = Set(active.map { UInt(bitPattern: $0) })
+        if fresh != current {
+            log.notice("trackpad list changed (\(current.count) -> \(fresh.count)), restarting multitouch")
+            start()
+        }
+    }
 }
 
 // MARK: - App / menu bar
@@ -602,6 +790,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let popover = NSPopover()
     private var pausedObserver: AnyCancellable?
     private var updateObserver: AnyCancellable?
+    private var activity: NSObjectProtocol?
+    private var observers: [NSObjectProtocol] = []
+    private var watchdog: Timer?
+
+    /// Keeps the input alive across days: no App Nap, release the pointer on sleep, rebuild trackpad input on wake/display changes.
+    private func installRecovery() {
+        activity = ProcessInfo.processInfo.beginActivity(options: .userInitiatedAllowingIdleSystemSleep,
+                                                         reason: "Listening for trackpad edge gestures")
+        let ws = NSWorkspace.shared.notificationCenter
+        observers.append(ws.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { _ in
+            controller.reset()
+        })
+        for name in [NSWorkspace.didWakeNotification, NSWorkspace.screensDidWakeNotification] {
+            observers.append(ws.addObserver(forName: name, object: nil, queue: .main) { _ in
+                MultitouchManager.shared.scheduleRestart("wake", after: 1.5)
+            })
+        }
+        observers.append(NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { _ in
+            MultitouchManager.shared.scheduleRestart("display change", after: 1.0)
+        })
+        watchdog = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { _ in
+            MultitouchManager.shared.checkDevices()
+        }
+    }
 
     /// Trackpad outline with two slider bars. A template image, so macOS tints it for light/dark menu bars.
     static func menuBarGlyph() -> NSImage {
@@ -653,7 +866,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        if !startMultitouch() {
+        installRecovery()
+        if !MultitouchManager.shared.start() {
             let a = NSAlert(); a.messageText = "No trackpad found"; a.runModal()
         }
     }
@@ -662,11 +876,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let b = item.button else { return }
         if popover.isShown { popover.performClose(nil) }
         else {
+            MultitouchManager.shared.restartIfStale()
             popover.show(relativeTo: b.bounds, of: b, preferredEdge: .minY)
             NSApp.activate(ignoringOtherApps: true)
         }
     }
-    func applicationWillTerminate(_ n: Notification) { controller.end() }
+    func applicationWillTerminate(_ n: Notification) { controller.reset() }
 }
 
 // one instance only: if another copy is already running, leave it alone and quit this one
