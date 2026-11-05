@@ -2,6 +2,18 @@
 
 All notable changes to EdgeSlider are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.5.3] - 2026-11-05
+
+### Fixed
+- Sliders and the on-screen indicator stopping after days of use: the multitouch device list is kept alive and rebuilt after wake, display changes and trackpad reconnects.
+- Brightness targets the built-in display and no longer engages (or jumps to 0%) when the current value cannot be read.
+- The indicator is no longer suppressed by stale state; it resets on sleep and wake.
+- A hung brightness or volume call no longer blocks the controls permanently.
+- The frozen pointer is released if touch frames stop mid-gesture; Magic Mouse touches are ignored; gesture state is thread-safe.
+
+### Changed
+- App Nap is disabled for the app, and recovery events are logged (subsystem `vc.osborne.edgeslider`).
+
 ## [1.5.2] - 2026-11-04
 
 ### Changed
