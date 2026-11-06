@@ -2,6 +2,18 @@
 
 All notable changes to EdgeSlider are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.6] - 2026-11-06
+
+### Added
+- Palm rejection: contacts larger than a fingertip (read from the trackpad's contact size) cancel the slider and block new gestures until every finger lifts. The limit is higher once a slider is engaged, so a firm press does not drop it.
+- Edge touches are ignored for 0.5s after a key press.
+
+### Fixed
+- A palm that stayed on the edge after another finger lifted was treated as a fresh touch.
+
+### Developer
+- `EdgeSlider --log-touches` prints per-contact size data (CSV) for calibration.
+
 ## [1.5.4] - 2026-11-05
 
 ### Changed

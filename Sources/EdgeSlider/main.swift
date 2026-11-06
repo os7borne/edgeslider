@@ -11,6 +11,13 @@ let log = Logger(subsystem: "vc.osborne.edgeslider", category: "input")
 
 let deadZone: Float = 0.035      // vertical travel (fraction of pad height) before the control engages
 
+// Palm rejection. Contact size comes from the private MTTouch record; thresholds were calibrated from --log-touches
+// captures on one MacBook trackpad (fingertip size 0.5-1.0 / major 7-10, thumb or firm press up to ~1.5 / 12, palm 2.3-6 / 17-25).
+// Once a gesture is engaged the limits are higher, so a firm press does not drop it (hysteresis).
+let palmSize: Float = 2.0, palmMajor: Float = 15
+let palmSizeEngaged: Float = 2.8, palmMajorEngaged: Float = 19
+let keyGuard = 0.5               // seconds after a key press during which a new edge touch is ignored (palms rest while typing)
+
 // MARK: - Volume (CoreAudio)
 
 enum Volume {
@@ -281,8 +288,11 @@ final class HUD {
     private var scheduled = false
 
     init() {
-        window = NSWindow(contentRect: NSRect(origin: .zero, size: size),
-                          styleMask: .borderless, backing: .buffered, defer: false)
+        // a non-activating panel is what reliably shows over other apps' full-screen Spaces
+        let panel = NSPanel(contentRect: NSRect(origin: .zero, size: size),
+                            styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        panel.isFloatingPanel = true; panel.hidesOnDeactivate = false; panel.becomesKeyOnlyIfNeeded = true
+        window = panel
         window.level = .screenSaver
         window.isOpaque = false
         window.backgroundColor = .clear
@@ -387,8 +397,10 @@ final class DeviceHUD {
     private let height: CGFloat = 52
 
     init() {
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 240, height: height),
-                          styleMask: .borderless, backing: .buffered, defer: false)
+        let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 240, height: height),
+                            styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        panel.isFloatingPanel = true; panel.hidesOnDeactivate = false; panel.becomesKeyOnlyIfNeeded = true
+        window = panel
         window.level = .screenSaver
         window.isOpaque = false
         window.backgroundColor = .clear
@@ -488,6 +500,8 @@ final class EdgeController {
     private var corner = Corner.none
     private var lastTap: [Corner: (t: Double, x: Float, y: Float)] = [:]   // first tap of a pending double-tap
     private let deviceHUD = DeviceHUD()
+    private var prevTouchingCount: Int32 = 0   // touching contacts in the previous frame
+    private var palmLock = false               // a palm-sized contact is down; no new gesture until all fingers lift
 
     // Touch frames arrive on one thread per device, and sleep/wake handlers run on main: all gesture state is guarded.
     private let stateLock = NSLock()
@@ -513,6 +527,7 @@ final class EdgeController {
     func reset() {
         stateLock.lock()
         end(); trackedID = -1; corner = .none; lastTap = [:]; activeDevice = nil
+        prevTouchingCount = 0; palmLock = false
         stateLock.unlock()
         hud.reset()
     }
@@ -528,14 +543,27 @@ final class EdgeController {
     private func bumpHaptic() { if cfg.haptic != .off { perform(.levelChange) } }
 
     // Called on the multitouch callback thread with the single touch (nil if no finger is touching or >1 fingers)
-    func update(device: UnsafeMutableRawPointer?, touch: (id: Int32, x: Float, y: Float)?, count: Int32) {
+    // `touching` = contacts in state 4; `maxSize`/`maxMajor` = the largest contact among them (palm detection).
+    func update(device: UnsafeMutableRawPointer?, touch: (id: Int32, x: Float, y: Float)?, count: Int32,
+                touching: Int32, maxSize: Float, maxMajor: Float) {
         stateLock.lock(); defer { stateLock.unlock() }
         let now = CFAbsoluteTimeGetCurrent()
         // a second multitouch device (second trackpad) must not hijack a gesture already in progress
         if trackedID != -1, let d = device, let a = activeDevice, d != a { return }
         activeDevice = device
         lastFrame = now
+        let prevTouching = prevTouchingCount
+        prevTouchingCount = touching
         guard cfg.enabled else { end(); trackedID = -1; return }
+
+        // palm rejection: a palm-sized contact anywhere on the pad cancels the gesture and locks out new ones until every finger lifts
+        let big = side != nil ? (maxSize > palmSizeEngaged || maxMajor > palmMajorEngaged)
+                              : (maxSize > palmSize || maxMajor > palmMajor)
+        if big {
+            palmLock = true
+            if side != nil || landedInEdge { end(); landedInEdge = false }
+        }
+        if touching == 0 { palmLock = false }
         guard let t = touch else {
             if count <= 1 { finishTap(now) }
             end(); trackedID = -1; return
@@ -548,11 +576,15 @@ final class EdgeController {
             let ew = cfg.edgeWidth
             let inEdge = t.x < ew || t.x > 1 - ew
             let zoneOK = !cfg.bottomQuarterOnly || t.y < 0.25
-            landedInEdge = inEdge && zoneOK
+            // eligible only as a genuine solo landing: not while a palm is down, not a survivor of a multi-finger
+            // frame (e.g. a palm that stays after the other finger lifts), and not right after typing
+            let solo = !palmLock && prevTouching <= 1
+            let typing = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .keyDown) < keyGuard
+            landedInEdge = inEdge && zoneOK && solo && !typing
             landSide = t.x < 0.5 ? .left : .right
             startX = t.x; startY = t.y; lastY = t.y; startT = now; maxMove = 0
             let inCornerRow = cfg.cornerEdge == .top ? t.y > 0.86 : t.y < 0.14
-            corner = !inCornerRow ? .none
+            corner = !inCornerRow || !solo ? .none
                    : (cfg.quickMute && t.x > 0.86) ? .right
                    : (cfg.switchOutput && t.x < 0.14) ? .left : .none
         }
@@ -674,18 +706,44 @@ typealias MTDimensions = @convention(c) (UnsafeMutableRawPointer, UnsafeMutableP
 
 var framesSinceStart = 0
 
-let mtCallback: MTCallback = { dev, data, count, _, _ in
+// Developer tool (`EdgeSlider --log-touches`): prints every contact in every frame to stdout as CSV so contact
+// size fields can be calibrated for palm rejection. Offsets follow the community MTTouch layout and are unverified.
+let logTouches = CommandLine.arguments.contains("--log-touches")
+private let sizeOffset = 48, pressureOffset = 52, angleOffset = 56, majorOffset = 60, minorOffset = 64, densityOffset = 92
+
+private func logFrame(_ data: UnsafeMutableRawPointer, count: Int32, time: Double) {
+    for i in 0..<Int(count) {
+        let d = data + i * touchStride
+        let f = { (o: Int) in String(format: "%.4f", d.load(fromByteOffset: o, as: Float.self)) }
+        let line = "\(String(format: "%.3f", time)),\(count),\(d.load(fromByteOffset: identifierOffset, as: Int32.self)),"
+            + "\(d.load(fromByteOffset: stateOffset, as: Int32.self)),\(f(normXOffset)),\(f(normXOffset + 4)),"
+            + "\(f(sizeOffset)),\(d.load(fromByteOffset: pressureOffset, as: Int32.self)),\(f(angleOffset)),"
+            + "\(f(majorOffset)),\(f(minorOffset)),\(f(densityOffset))\n"
+        fputs(line, stdout)
+    }
+}
+
+let mtCallback: MTCallback = { dev, data, count, ts, _ in
     framesSinceStart &+= 1
+    if logTouches, let d = data, count > 0 { logFrame(d, count: count, time: ts) }
     var touch: (id: Int32, x: Float, y: Float)? = nil
-    if count == 1, let d = data {
-        let state = d.load(fromByteOffset: stateOffset, as: Int32.self)
-        if state == 4 {  // touching
-            touch = (d.load(fromByteOffset: identifierOffset, as: Int32.self),
-                     d.load(fromByteOffset: normXOffset, as: Float.self),
-                     d.load(fromByteOffset: normXOffset + 4, as: Float.self))
+    var touching: Int32 = 0
+    var maxSize: Float = 0, maxMajor: Float = 0
+    if let d = data, count > 0 {
+        for i in 0..<Int(count) {
+            let p = d + i * touchStride
+            guard p.load(fromByteOffset: stateOffset, as: Int32.self) == 4 else { continue }   // 4 = touching
+            touching += 1
+            maxSize = max(maxSize, p.load(fromByteOffset: sizeOffset, as: Float.self))
+            maxMajor = max(maxMajor, p.load(fromByteOffset: majorOffset, as: Float.self))
+            if count == 1 {
+                touch = (p.load(fromByteOffset: identifierOffset, as: Int32.self),
+                         p.load(fromByteOffset: normXOffset, as: Float.self),
+                         p.load(fromByteOffset: normXOffset + 4, as: Float.self))
+            }
         }
     }
-    controller.update(device: dev, touch: touch, count: count)
+    controller.update(device: dev, touch: touch, count: count, touching: touching, maxSize: maxSize, maxMajor: maxMajor)
     return 0
 }
 
@@ -892,6 +950,10 @@ if !CommandLine.arguments.contains("--render-screenshots"),
     exit(0)
 }
 
+if logTouches {
+    setvbuf(stdout, nil, _IOLBF, 0)
+    print("t,count,id,state,x,y,size,pressure,angle,major,minor,zdensity")
+}
 let app = NSApplication.shared
 app.setActivationPolicy(.accessory)
 let delegate = AppDelegate()
