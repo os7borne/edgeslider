@@ -298,7 +298,7 @@ final class HUD {
         window.backgroundColor = .clear
         window.hasShadow = true
         window.ignoresMouseEvents = true
-        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
+        window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary, .ignoresCycle]
 
         let fx = NSVisualEffectView(frame: NSRect(origin: .zero, size: size))
         fx.material = .hudWindow; fx.state = .active; fx.blendingMode = .behindWindow
@@ -406,7 +406,7 @@ final class DeviceHUD {
         window.backgroundColor = .clear
         window.hasShadow = true
         window.ignoresMouseEvents = true
-        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
+        window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary, .ignoresCycle]
 
         let fx = NSVisualEffectView()
         fx.material = .hudWindow; fx.state = .active; fx.blendingMode = .behindWindow
