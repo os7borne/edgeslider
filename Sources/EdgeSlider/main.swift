@@ -14,9 +14,29 @@ let deadZone: Float = 0.035      // vertical travel (fraction of pad height) bef
 // Palm rejection. Contact size comes from the private MTTouch record; thresholds were calibrated from --log-touches
 // captures on one MacBook trackpad (fingertip size 0.5-1.0 / major 7-10, thumb or firm press up to ~1.5 / 12, palm 2.3-6 / 17-25).
 // Once a gesture is engaged the limits are higher, so a firm press does not drop it (hysteresis).
-let palmSize: Float = 2.0, palmMajor: Float = 15
-let palmSizeEngaged: Float = 2.8, palmMajorEngaged: Float = 19
-let keyGuard = 0.5               // seconds after a key press during which a new edge touch is ignored (palms rest while typing)
+enum Palm {
+    static let landing: (size: Float, major: Float) = (2.0, 15)
+    static let engaged: (size: Float, major: Float) = (2.8, 19)
+    static let keyGuard = 0.5    // seconds after a key press during which new touches and corner taps are ignored (palms rest while typing)
+    static func secondsSinceKey() -> Double {
+        CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .keyDown)
+    }
+}
+
+/// One setup for both on-screen pills. A non-activating panel that moves to the active Space is what shows over
+/// other apps' full-screen Spaces (.canJoinAllSpaces did not).
+func makeHUDPanel(size: NSSize) -> NSPanel {
+    let panel = NSPanel(contentRect: NSRect(origin: .zero, size: size),
+                        styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+    panel.isFloatingPanel = true; panel.hidesOnDeactivate = false; panel.becomesKeyOnlyIfNeeded = true
+    panel.level = .screenSaver
+    panel.isOpaque = false
+    panel.backgroundColor = .clear
+    panel.hasShadow = true
+    panel.ignoresMouseEvents = true
+    panel.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary, .ignoresCycle]
+    return panel
+}
 
 // MARK: - Volume (CoreAudio)
 
@@ -275,7 +295,7 @@ final class HUDView: NSView {
 
 final class HUD {
     private let size = NSSize(width: 56, height: 230)
-    private let window: NSWindow
+    private let window: NSPanel
     private let view: HUDView
     private var generation = 0
     private var visible = false
@@ -288,17 +308,7 @@ final class HUD {
     private var scheduled = false
 
     init() {
-        // a non-activating panel is what reliably shows over other apps' full-screen Spaces
-        let panel = NSPanel(contentRect: NSRect(origin: .zero, size: size),
-                            styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
-        panel.isFloatingPanel = true; panel.hidesOnDeactivate = false; panel.becomesKeyOnlyIfNeeded = true
-        window = panel
-        window.level = .screenSaver
-        window.isOpaque = false
-        window.backgroundColor = .clear
-        window.hasShadow = true
-        window.ignoresMouseEvents = true
-        window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary, .ignoresCycle]
+        window = makeHUDPanel(size: size)
 
         let fx = NSVisualEffectView(frame: NSRect(origin: .zero, size: size))
         fx.material = .hudWindow; fx.state = .active; fx.blendingMode = .behindWindow
@@ -390,23 +400,14 @@ final class HUD {
 
 /// Horizontal pill at the top centre of the main display: icon + output device name.
 final class DeviceHUD {
-    private let window: NSWindow
+    private let window: NSPanel
     private let icon = NSImageView()
     private let label = NSTextField(labelWithString: "")
     private var generation = 0
     private let height: CGFloat = 52
 
     init() {
-        let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 240, height: height),
-                            styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
-        panel.isFloatingPanel = true; panel.hidesOnDeactivate = false; panel.becomesKeyOnlyIfNeeded = true
-        window = panel
-        window.level = .screenSaver
-        window.isOpaque = false
-        window.backgroundColor = .clear
-        window.hasShadow = true
-        window.ignoresMouseEvents = true
-        window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary, .ignoresCycle]
+        window = makeHUDPanel(size: NSSize(width: 240, height: height))
 
         let fx = NSVisualEffectView()
         fx.material = .hudWindow; fx.state = .active; fx.blendingMode = .behindWindow
@@ -500,8 +501,9 @@ final class EdgeController {
     private var corner = Corner.none
     private var lastTap: [Corner: (t: Double, x: Float, y: Float)] = [:]   // first tap of a pending double-tap
     private let deviceHUD = DeviceHUD()
-    private var prevTouchingCount: Int32 = 0   // touching contacts in the previous frame
-    private var palmLock = false               // a palm-sized contact is down; no new gesture until all fingers lift
+    // New gestures are ineligible until every finger lifts: set by a palm-sized contact or by a second finger
+    // (so a palm that stays after the other finger lifts is never taken for a fresh landing).
+    private var lockout = false
 
     // Touch frames arrive on one thread per device, and sleep/wake handlers run on main: all gesture state is guarded.
     private let stateLock = NSLock()
@@ -527,7 +529,7 @@ final class EdgeController {
     func reset() {
         stateLock.lock()
         end(); trackedID = -1; corner = .none; lastTap = [:]; activeDevice = nil
-        prevTouchingCount = 0; palmLock = false
+        lockout = false
         stateLock.unlock()
         hud.reset()
     }
@@ -552,18 +554,16 @@ final class EdgeController {
         if trackedID != -1, let d = device, let a = activeDevice, d != a { return }
         activeDevice = device
         lastFrame = now
-        let prevTouching = prevTouchingCount
-        prevTouchingCount = touching
         guard cfg.enabled else { end(); trackedID = -1; return }
 
         // palm rejection: a palm-sized contact anywhere on the pad cancels the gesture and locks out new ones until every finger lifts
-        let big = side != nil ? (maxSize > palmSizeEngaged || maxMajor > palmMajorEngaged)
-                              : (maxSize > palmSize || maxMajor > palmMajor)
-        if big {
-            palmLock = true
-            if side != nil || landedInEdge { end(); landedInEdge = false }
+        let palmLimit = side != nil ? Palm.engaged : Palm.landing
+        let palm = maxSize > palmLimit.size || maxMajor > palmLimit.major
+        if palm || touching > 1 {
+            lockout = true
+            if palm && (side != nil || landedInEdge) { end(); landedInEdge = false }
         }
-        if touching == 0 { palmLock = false }
+        if touching == 0 { lockout = false }
         guard let t = touch else {
             if count <= 1 { finishTap(now) }
             end(); trackedID = -1; return
@@ -576,11 +576,9 @@ final class EdgeController {
             let ew = cfg.edgeWidth
             let inEdge = t.x < ew || t.x > 1 - ew
             let zoneOK = !cfg.bottomQuarterOnly || t.y < 0.25
-            // eligible only as a genuine solo landing: not while a palm is down, not a survivor of a multi-finger
-            // frame (e.g. a palm that stays after the other finger lifts), and not right after typing
-            let solo = !palmLock && prevTouching <= 1
-            let typing = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .keyDown) < keyGuard
-            landedInEdge = inEdge && zoneOK && solo && !typing
+            let solo = !lockout
+            // the key-press query is only made for landings that could otherwise count
+            landedInEdge = inEdge && zoneOK && solo && Palm.secondsSinceKey() >= Palm.keyGuard
             landSide = t.x < 0.5 ? .left : .right
             startX = t.x; startY = t.y; lastY = t.y; startT = now; maxMove = 0
             let inCornerRow = cfg.cornerEdge == .top ? t.y > 0.86 : t.y < 0.14
@@ -662,8 +660,7 @@ final class EdgeController {
     private func finishTap(_ now: Double) {
         guard trackedID != -1, corner != .none, maxMove < 0.06, now - startT < 0.6 else { return }
         // typing guard: a palm resting on a corner while typing is not a tap
-        let sinceKey = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .keyDown)
-        guard sinceKey > 0.5 else { lastTap[corner] = nil; return }
+        guard Palm.secondsSinceKey() > Palm.keyGuard else { lastTap[corner] = nil; return }
         // same-spot check: the second tap must land near the first
         guard let first = lastTap[corner], now - first.t < 0.7,
               abs(startX - first.x) < 0.12, abs(startY - first.y) < 0.12 else {
@@ -756,6 +753,7 @@ final class MultitouchManager {
     private let unregister: MTUnregister?, stopFn: MTStop?, dims: MTDimensions?
     private var devices: CFArray?
     private var active: [UnsafeMutableRawPointer] = []
+    private var activeSignature: [Int] = []
     private var restartToken = 0
     private var lastRestart = 0.0
 
@@ -777,15 +775,22 @@ final class MultitouchManager {
     }
 
     /// Trackpads only: a Magic Mouse is also a multitouch device (taller than wide), and its touches are not edge gestures.
+    private func sensorSize(of dev: UnsafeMutableRawPointer) -> (w: Int32, h: Int32)? {
+        var w: Int32 = 0, h: Int32 = 0
+        guard let dims = dims, dims(dev, &w, &h) == 0, w > 0, h > 0 else { return nil }
+        return (w, h)
+    }
+
     private func trackpads(in list: CFArray) -> [UnsafeMutableRawPointer] {
         let all = allDevices(in: list)
-        let pads = all.filter { dev in
-            guard let dims = dims else { return true }
-            var w: Int32 = 0, h: Int32 = 0
-            guard dims(dev, &w, &h) == 0, w > 0, h > 0 else { return true }
-            return w >= h
-        }
+        let pads = all.filter { sensorSize(of: $0).map { $0.w >= $0.h } ?? true }
         return pads.isEmpty ? all : pads            // never end up with no device because of the heuristic
+    }
+
+    /// Stable description of a set of trackpads (count + sensor sizes). Device pointers can't be compared:
+    /// MTDeviceCreateList hands back different objects on every call, even for the same trackpad.
+    private func signature(of pads: [UnsafeMutableRawPointer]) -> [Int] {
+        pads.map { dev in sensorSize(of: dev).map { Int($0.w) << 16 | Int($0.h) } ?? 0 }.sorted()
     }
 
     /// Main thread. Returns false if no device could be started.
@@ -796,6 +801,7 @@ final class MultitouchManager {
               let list = create()?.takeRetainedValue() else { return false }
         devices = list
         active = trackpads(in: list)
+        activeSignature = signature(of: active)
         for dev in active { register(dev, mtCallback); startFn(dev, 0) }
         lastRestart = CFAbsoluteTimeGetCurrent()
         log.notice("multitouch started: \(self.active.count) of \(CFArrayGetCount(list)) devices, \(framesSinceStart) frames since launch")
@@ -829,10 +835,9 @@ final class MultitouchManager {
     /// Periodic check: if the set of trackpads changed (reconnect, hot-plug), rebuild.
     func checkDevices() {
         guard controller.isIdle, let create = create, let list = create()?.takeRetainedValue() else { return }
-        let fresh = Set(trackpads(in: list).map { UInt(bitPattern: $0) })
-        let current = Set(active.map { UInt(bitPattern: $0) })
-        if fresh != current {
-            log.notice("trackpad list changed (\(current.count) -> \(fresh.count)), restarting multitouch")
+        let fresh = signature(of: trackpads(in: list))
+        if fresh != activeSignature {
+            log.notice("trackpad list changed (\(self.activeSignature.count) -> \(fresh.count)), restarting multitouch")
             start()
         }
     }
